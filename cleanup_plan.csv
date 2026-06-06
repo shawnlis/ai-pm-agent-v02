@@ -1,0 +1,58 @@
+project,current_path,type,proposed_category,proposed_destination,reason,confidence,safe_to_move,manual_review_required
+ai_pm_agent_v02,.venv,dir,GIT_IGNORE_ONLY,,local dependency/cache/archive/state directory; ignore for upload,high,false,false
+ai_pm_agent_v02,archive,dir,GIT_IGNORE_ONLY,,local dependency/cache/archive/state directory; ignore for upload,high,false,false
+ai_pm_agent_v02,__pycache__,dir,KEEP_REVIEW,,archive candidate is referenced by .gitignore; kept for review,low,false,true
+ai_pm_agent_v02,.env,file,SENSITIVE_REVIEW,,sensitive filename pattern; do not upload unless explicitly reviewed,high,false,true
+ai_pm_agent_v02,.gitignore,file,KEEP_CORE,,"dependency, config, or entrypoint",high,false,false
+ai_pm_agent_v02,ai_pm_agent.py,file,KEEP_CORE,,"dependency, config, or entrypoint",high,false,false
+ai_pm_agent_v02,CLEANUP_DRY_RUN.md,file,KEEP_CORE,,migration audit report generated for GitHub readiness,high,false,false
+ai_pm_agent_v02,cleanup_plan.csv,file,KEEP_CORE,,migration audit report generated for GitHub readiness,high,false,false
+ai_pm_agent_v02,CLEANUP_SUMMARY.md,file,KEEP_CORE,,migration audit report generated for GitHub readiness,high,false,false
+ai_pm_agent_v02,GITHUB_READY_CHECKLIST.md,file,KEEP_CORE,,migration audit report generated for GitHub readiness,high,false,false
+ai_pm_agent_v02,Openrouter.txt,file,SENSITIVE_REVIEW,,sensitive filename pattern; do not upload unless explicitly reviewed,high,false,true
+ai_pm_agent_v02,requirements.txt,file,KEEP_CORE,,"dependency, config, or entrypoint",high,false,false
+ai_pm_agent_v02,watchlist.csv,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,data/company_db/company_research.sqlite,file,LARGE_REVIEW,,file exceeds 20MB threshold,high,false,true
+ai_pm_agent_v02,data/fact_cache/facts.sqlite,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,docs/APPROVAL_PACKETS.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/APPROVAL_VALIDATION.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/COMPANY_DB.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/COMPANY_REPORTS.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/MANUAL_RUNBOOK.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/OFFLINE_WORKFLOW_SMOKE_TEST.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,docs/REFRESH_PLANNER.md,file,KEEP_REVIEW,,not clearly generated or safe to archive,medium,false,true
+ai_pm_agent_v02,scripts/company_db_approval.py,file,KEEP_REVIEW,,script may be useful but not confirmed as core,medium,false,true
+ai_pm_agent_v02,scripts/company_db_import.py,file,KEEP_REVIEW,,script may be useful but not confirmed as core,medium,false,true
+ai_pm_agent_v02,scripts/company_db_refresh.py,file,KEEP_REVIEW,,script may be useful but not confirmed as core,medium,false,true
+ai_pm_agent_v02,scripts/company_db_report.py,file,KEEP_REVIEW,,script may be useful but not confirmed as core,medium,false,true
+ai_pm_agent_v02,scripts/company_db_smoke_test.py,file,KEEP_REVIEW,,script may be useful but not confirmed as core,medium,false,true
+ai_pm_agent_v02,src/ai_pm_agent/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/approved_commands.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/manifest.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/packet.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/runbook.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/templates.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/validator.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/approval/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/artifacts/importer.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/artifacts/paths.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/artifacts/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/cli/company_approval.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/cli/company_db.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/cli/company_refresh.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/cli/company_reports.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/cli/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/company_db/migrations.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/company_db/repository.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/company_db/schema.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/company_db/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/refresh/planner.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/refresh/queues.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/refresh/scoring.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/refresh/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/reports/company_dossier.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/reports/markdown.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/reports/watchlist_reports.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,src/ai_pm_agent/reports/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,tests/test_company_db.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false
+ai_pm_agent_v02,tests/__init__.py,file,KEEP_CORE,,"source, tests, app assets, or active data tree",high,false,false

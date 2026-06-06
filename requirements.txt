@@ -1,0 +1,8 @@
+﻿openai>=2.0.0
+python-dotenv>=1.0.1
+pandas>=2.2.0
+numpy>=1.26.0
+yfinance>=0.2.40
+rich>=13.7.0
+tenacity>=8.2.3
+pydantic>=2.7.0

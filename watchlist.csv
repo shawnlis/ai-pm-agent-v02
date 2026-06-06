@@ -1,0 +1,72 @@
+ticker,name,theme,market
+LITE,Lumentum,Optical Components AI Data Center,US
+AAOI,Applied Optoelectronics,Optical Modules AI Data Center,US
+COHR,Coherent,Optical Components AI Data Center,US
+FN,Fabrinet,Optical Manufacturing AI Data Center,US
+CIEN,Ciena,Optical Networking AI Data Center,US
+ANET,Arista Networks,AI Data Center Networking,US
+CSCO,Cisco,AI Data Center Networking,US
+300308.SZ,Zhongji Innolight 中际旭创,Optical Modules AI Data Center,China
+300502.SZ,Eoptolink 新易盛,Optical Modules AI Data Center,China
+300394.SZ,TFC Communication 天孚通信,Optical Components Connectivity AI Data Center,China
+002281.SZ,Accelink 光迅科技,Optical Components AI Data Center,China
+603083.SS,Cambridge Technology 剑桥科技,Optical Modules AI Data Center,China
+6869.HK,Yangtze Optical Fibre 长飞光纤,Optical Fiber Cable Infrastructure,Hong Kong
+GLW,Corning,Optical Fiber Glass AI Data Center,US
+5801.T,Furukawa Electric 古河电气,Optical Fiber Cable Power Cable Infrastructure,Japan
+5802.T,Sumitomo Electric 住友电工,Optical Fiber Cable Power Cable Infrastructure,Japan
+PRY.MI,Prysmian,Power Cables Optical Fiber Grid Data Center Infrastructure,Italy
+NEX.PA,Nexans,Power Cables Grid Electrification Data Center Electrical Infrastructure,France
+MU,Micron,HBM DRAM NAND AI Memory,US
+000660.KS,SK hynix,HBM DRAM NAND AI Memory,Korea
+005930.KS,Samsung Electronics,HBM DRAM NAND AI Memory,Korea
+285A.T,Kioxia,NAND SSD Storage AI Data Center,Japan
+WDC,Western Digital,NAND SSD Storage AI Data Center,US
+SNDK,SanDisk,NAND SSD Storage AI Data Center,US
+PSTG,Pure Storage,NAND SSD Storage AI Data Center,US
+NTAP,NetApp,NAND SSD Storage AI Data Center,US
+STX,Seagate Technology,HDD Nearline Storage AI Data Center,US
+AVGO,Broadcom,AI Networking ASIC Interconnect,US
+MRVL,Marvell,AI Networking ASIC Optical DSP Interconnect,US
+NVDA,Nvidia,AI Accelerator GPU Infrastructure,US
+AMD,AMD,AI Accelerator GPU Infrastructure,US
+INTC,Intel,Foundry AI ASIC Semiconductor Manufacturing,US
+MXL,MaxLinear,AI Data Center Networking Connectivity Semiconductors,US
+MTSI,MACOM Technology Solutions,AI Data Center Networking Connectivity Semiconductors,US
+LSCC,Lattice Semiconductor,AI Data Center Networking Connectivity Semiconductors,US
+ADI,Analog Devices,Analog Power Management Data Center Infrastructure,US
+2330.TW,TSMC,Foundry Advanced Packaging AI Infrastructure,Taiwan
+AMAT,Applied Materials,Semiconductor Equipment WFE AI Infrastructure,US
+ASML,ASML,Semiconductor Equipment Lithography AI Infrastructure,Europe
+LRCX,Lam Research,Semiconductor Equipment WFE Etch Deposition AI Infrastructure,US
+KLAC,KLA,Semiconductor Equipment Inspection Metrology AI Infrastructure,US
+6857.T,Advantest,Semiconductor Equipment Test Equipment AI Infrastructure,Japan
+8035.T,Tokyo Electron,Semiconductor Equipment WFE AI Infrastructure,Japan
+0522.HK,ASMPT,Advanced Packaging Semiconductor Equipment AI Infrastructure,Hong Kong
+4062.T,Ibiden,Advanced Packaging ABF Substrate AI Infrastructure,Japan
+2802.T,Ajinomoto,ABF Substrate Materials AI Infrastructure,Japan
+3037.TW,Unimicron,PCB ABF Substrate AI Infrastructure,Taiwan
+002916.SZ,Shennan Circuits 深南电路,PCB Substrate AI Infrastructure,China
+009150.KS,Samsung Electro-Mechanics,MLCC Electronic Components Advanced Packaging Substrate AI Infrastructure,Korea
+VRT,Vertiv,Data Center Power Thermal Infrastructure,US
+ETN,Eaton,Data Center Electrical Power Infrastructure,US
+NVT,nVent,Data Center Electrical Enclosures Infrastructure,US
+HUBB,Hubbell,Data Center Electrical Grid Infrastructure,US
+GEV,GE Vernova,Grid Power Infrastructure,US
+ENR.DE,Siemens Energy,Grid Power Equipment,Germany
+SU.PA,Schneider Electric,Data Center Power Electrical Infrastructure,France
+2308.TW,Delta Electronics,Data Center Power Thermal Infrastructure,Taiwan
+JCI,Johnson Controls,Data Center Cooling Building Automation Infrastructure,US
+EME,EMCOR Group,Data Center Electrical Construction Infrastructure,US
+APH,Amphenol,AI Data Center Interconnect Connectors Industrial Electrification,US
+TEL,TE Connectivity,AI Data Center Interconnect Connectors Sensors Industrial Electrification,US
+FCEL,FuelCell Energy,Data Center Distributed Power Fuel Cells AI Infrastructure,US
+BE,Bloom Energy,Data Center Distributed Power Fuel Cells AI Infrastructure,US
+CLS,Celestica,AI Server EMS Data Center Infrastructure,US
+SMCI,Super Micro Computer,AI Server Infrastructure,US
+2382.TW,Quanta Computer,AI Server ODM Infrastructure,Taiwan
+6981.T,Murata Manufacturing,Electronic Components MLCC Capacitors RF Modules AI Infrastructure Electrification,Japan
+688981.SS,SMIC A-share,Semiconductor Foundry AI Infrastructure China Domestic Semiconductor Supply Chain,China
+0981.HK,SMIC H-share,Semiconductor Foundry AI Infrastructure China Domestic Semiconductor Supply Chain,Hong Kong
+688396.SS,China Resources Microelectronics,Semiconductor Foundry Power Semiconductor China Domestic Supply Chain,China
+MSFT,Microsoft,AI Software Cloud Hyperscaler Capex Context,US
