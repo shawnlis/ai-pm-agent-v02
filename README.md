@@ -1,4 +1,4 @@
-# AI PM Agent v0.2
+# AI PM Agent v0.3
 
 AI PM Agent is a Python research workflow for public-company analysis, PM decision logging, chokepoint scouting, company database import/reporting, and approval-packet generation. The repository contains source code, docs, tests, templates, and schema-only database assets. Local secrets, generated research outputs, caches, and private SQLite databases are intentionally not tracked.
 
@@ -78,7 +78,8 @@ The `.gitignore` excludes local secrets and generated/private artifacts, includi
 - `.env`, `.env.*`
 - `Openrouter.txt`
 - `secrets/`, `credentials/`, cookies, sessions, browser state
-- `outputs/`, `diagnostics/`, logs, caches, archives
+- `outputs/`, `reports/`, `diagnostics/`, logs, caches, archives
+- `data/fact_cache/`
 - SQLite/database files and model artifacts
 - virtual environments and Python caches
 

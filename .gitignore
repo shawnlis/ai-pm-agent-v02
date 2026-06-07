@@ -34,10 +34,12 @@ build/
 out/
 
 outputs/
+reports/
 hyatt_agent_output*/
 *_profile/
 diagnostics/
 cache/
+data/fact_cache/
 logs/
 tmp/
 temp/
@@ -80,8 +82,10 @@ sessions/
 browser_state/
 storage_state/
 outputs/
+reports/
 diagnostics/
 cache/
+data/fact_cache/
 logs/
 tmp/
 temp/
