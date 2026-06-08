@@ -1224,7 +1224,18 @@ def get_macro_snapshot() -> str:
     return "\n".join(lines)
 
 
+PORTFOLIO_RECOMMENDATION_BOUNDARY_NOTICE = (
+    "Portfolio context is disabled for PM recommendations; use offline portfolio exposure reports instead."
+)
+
+
 def read_portfolio(path: str) -> str:
+    """Legacy diagnostics-only reader.
+
+    This helper is intentionally not used by PM prompt, PM memo, or recommendation
+    paths. Portfolio exposure work should use the offline portfolio reporting
+    modules under src/ai_pm_agent/portfolio/.
+    """
     p = Path(path)
     if not p.exists():
         return "No portfolio.csv found."
@@ -1246,6 +1257,16 @@ def read_portfolio(path: str) -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"Could not read portfolio.csv: {e}"
+
+
+def disabled_portfolio_context_notice() -> str:
+    return "\n".join([
+        "## Portfolio Recommendation Boundary",
+        "",
+        PORTFOLIO_RECOMMENDATION_BOUNDARY_NOTICE,
+        "Legacy portfolio.csv input is not read, injected into PM prompts, or used in PM memo/recommendation logic.",
+        "Use the offline portfolio exposure runner for separate local portfolio reporting.",
+    ])
 
 
 def theme_bucket(theme: str) -> str:
@@ -4014,7 +4035,6 @@ def build_pm_prompt(
     chokepoint_decision: Dict[str, Any],
     valuation_bridge_md: str,
     ai_agent_framework: str,
-    portfolio_md: str,
 ) -> str:
     memory_valuation_instruction = ""
     if "memory_dual_framework" in valuation_bridge_md:
@@ -4136,9 +4156,6 @@ Valuation bridge:
 AI agent structural-demand framework:
 {ai_agent_framework}
 
-Current portfolio:
-{portfolio_md}
-
 Please produce a buy-side deep-dive investment memo in Chinese.
 
 Required structure:
@@ -4162,7 +4179,7 @@ I. Serenity-style Chokepoint Analysis:
 - Whether it affects final action
 J. Bull case, base case, bear case: key assumptions and what must happen.
 K. 12-month tracking indicators and thesis kill triggers.
-L. Portfolio fit: overlap with current holdings, concentration risk, and whether this is new exposure or duplicated beta.
+L. Portfolio independence: no holdings are supplied; do not infer overlap, concentration risk, duplicated beta, or suitability from portfolio data.
 M. Final PM judgment: buy / small starter / tracking / watchlist / avoid, with position size and what would make you add or cut.
 
 Important:
@@ -7305,9 +7322,10 @@ def run_company_research(
         enabled=CHOKEPOINT_SCOUT_ENABLED,
     )
 
-    console.print("[bold cyan]Step 6/9: Portfolio context[/bold cyan]")
-    portfolio_md = read_portfolio(portfolio_path)
-    save_text(out_dir / "portfolio_context.md", portfolio_md)
+    console.print("[bold cyan]Step 6/9: Portfolio recommendation boundary[/bold cyan]")
+    console.print(f"[yellow]{PORTFOLIO_RECOMMENDATION_BOUNDARY_NOTICE}[/yellow]")
+    portfolio_boundary_md = disabled_portfolio_context_notice()
+    save_text(out_dir / "portfolio_context.md", portfolio_boundary_md)
 
     console.print("[bold cyan]Step 7/9: Deep PM memo via configured LLM[/bold cyan]")
     memo_prompt = build_pm_prompt(
@@ -7328,7 +7346,6 @@ def run_company_research(
         chokepoint_decision=chokepoint_decision,
         valuation_bridge_md=valuation_bridge_md,
         ai_agent_framework=AI_AGENT_DEMAND_FRAMEWORK,
-        portfolio_md=portfolio_md,
     )
     save_text(out_dir / "memo_prompt.md", memo_prompt)
     pm_memo = call_llm("Deep PM Agent", memo_prompt, diagnostics=llm_fetch_diagnostics)
@@ -7421,7 +7438,7 @@ def run_company_research(
         cached_facts_md,
         evidence_md,
         AI_AGENT_DEMAND_FRAMEWORK,
-        portfolio_md,
+        portfolio_boundary_md,
         pm_memo,
         "## Structured Decision",
         "```json",
@@ -8712,7 +8729,7 @@ def main() -> None:
     p1.add_argument("--name", required=True)
     p1.add_argument("--theme", default="AI Supply Chain")
     p1.add_argument("--market", default="US")
-    p1.add_argument("--portfolio", default="portfolio.csv")
+    p1.add_argument("--portfolio", default="portfolio.csv", help="Legacy no-op for PM recommendations; use offline portfolio exposure reports instead.")
     p1.add_argument("--output", default="outputs")
     p1.add_argument("--watchlist", default=DEFAULT_WATCHLIST_PATH)
     p1.add_argument("--max-peers", type=int, default=None)
@@ -8724,7 +8741,7 @@ def main() -> None:
 
     p2 = sub.add_parser("batch")
     p2.add_argument("--watchlist", default=DEFAULT_WATCHLIST_PATH)
-    p2.add_argument("--portfolio", default="portfolio.csv")
+    p2.add_argument("--portfolio", default="portfolio.csv", help="Legacy no-op for PM recommendations; use offline portfolio exposure reports instead.")
     p2.add_argument("--output", default="outputs")
     p2.add_argument("--limit", type=int, default=None)
     p2.add_argument("--max-peers", type=int, default=None)
@@ -8753,7 +8770,7 @@ def main() -> None:
 
     p5 = sub.add_parser("abtest-chokepoint")
     p5.add_argument("--watchlist", default="watchlist_chokepoint_test.csv")
-    p5.add_argument("--portfolio", default="portfolio.csv")
+    p5.add_argument("--portfolio", default="portfolio.csv", help="Legacy no-op for PM recommendations; use offline portfolio exposure reports instead.")
     p5.add_argument("--output", default="outputs")
     p5.add_argument("--limit", type=int, default=None)
     p5.add_argument("--max-peers", type=int, default=None)
