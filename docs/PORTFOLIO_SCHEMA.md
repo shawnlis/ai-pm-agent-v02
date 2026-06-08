@@ -119,6 +119,8 @@ Current fallback behavior:
 
 These fallbacks make local fixtures convenient, but they do not certify that values are live, current, or FX-normalized.
 
+For mixed-currency reporting, currency exposure should be weighted by base market value rather than raw local-currency units. The Phase 3C offline input runner reports `Currency Exposure by Base Market Value` and excludes non-base-currency rows that lack a safe base value.
+
 ## Manual Look-Through
 
 `LookThroughComponent` supports manually supplied look-through metadata for ETFs, funds, crypto ETFs, or index-like instruments.
