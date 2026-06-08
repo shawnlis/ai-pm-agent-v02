@@ -1,0 +1,6 @@
+Open Positions,Header,Asset Category,Currency,Symbol,Description,Quantity,Market Value,Market Value in Base,Security Type,Issuer,Underlying Symbol,Listing Country,Listing Exchange,Conid,ISIN,Account,Report Date
+Open Positions,Data,Stocks,USD,NVDA,NVIDIA Corp,150,20000,20000,STK,NVIDIA,,United States,NASDAQ,567890,US67066G1040,DU0000000,2026-06-08
+Open Positions,Data,Stocks,EUR,HY9H,SK Hynix GDS-like holding,60,9000,9720,STK,SK Hynix,000660.KS,Germany,FWB,678901,US78392B1070,DU0000000,2026-06-08
+Open Positions,Data,ETF,USD,ETHA,iShares Ethereum Trust ETF,250,8000,8000,ETF,iShares,ETH,United States,NASDAQ,789012,US46438F1012,DU0000000,2026-06-08
+Trades,Header,Asset Category,Currency,Symbol,Description,Quantity,Market Value,Market Value in Base
+Trades,Data,Stocks,USD,IGNORED,Ignored trade row,1,1,1

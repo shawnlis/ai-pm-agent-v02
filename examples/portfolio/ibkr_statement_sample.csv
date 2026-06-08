@@ -1,0 +1,5 @@
+Asset Category,Currency,Symbol,Description,Quantity,Market Value,Market Value in Base,Security Type,Issuer,Underlying Symbol,Listing Country,Listing Exchange,Conid,ISIN,Account,Report Date
+Stocks,USD,MSFT,Microsoft Corp,35,16000,16000,STK,Microsoft,,United States,NASDAQ,123456,US5949181045,DU0000000,2026-06-08
+Stocks,HKD,7709.HK,SK Hynix proxy / Hong Kong listing,1000,80000,10240,STK,SK Hynix,000660.KS,Hong Kong,SEHK,234567,KR7000660001,DU0000000,2026-06-08
+ETF,USD,TQQQ,ProShares UltraPro QQQ,250,25000,25000,ETF,ProShares,,United States,NASDAQ,345678,US74347X8314,DU0000000,2026-06-08
+Cash,USD,USD Cash,US Dollar cash balance,5000,5000,5000,CASH,,,,,456789,,DU0000000,2026-06-08
