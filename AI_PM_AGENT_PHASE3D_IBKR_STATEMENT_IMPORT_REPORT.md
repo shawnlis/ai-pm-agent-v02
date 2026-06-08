@@ -80,19 +80,19 @@ Results:
 - adapter/script compile: passed
 - existing portfolio tests: `31 passed, 2 subtests passed`
 - Phase 3C runner tests: `11 passed`
-- Phase 3D IBKR adapter tests: `6 passed`
-- full pytest: `125 passed, 2 subtests passed`
+- Phase 3D IBKR adapter tests: `7 passed`
+- full pytest: `126 passed, 2 subtests passed`
 
 ## Sample Command
 
 ```powershell
 python .\scripts\ibkr_statement_import.py `
-  --input .\examples\portfolio\ibkr_statement_sample.csv `
-  --input .\examples\portfolio\ibkr_flex_sectioned_sample.csv `
-  --portfolio-id sample_ibkr_import `
-  --as-of-date 2026-06-08 `
-  --base-currency USD `
+  --statement .\examples\portfolio\ibkr_statement_sample.csv `
   --out-dir .\reports\ibkr_import
+
+python .\scripts\ibkr_statement_import.py `
+  --statement .\examples\portfolio\ibkr_flex_sectioned_sample.csv `
+  --out-dir .\reports\ibkr_import_flex
 ```
 
 Expected sample outputs:
@@ -102,7 +102,24 @@ Expected sample outputs:
 - `reports/ibkr_import/ibkr_import_warnings.md`
 - `reports/ibkr_import/ibkr_import_summary.json`
 
-Sample result:
+Simple CSV sample result:
+
+- review rows: `4`
+- ready holdings: `3`
+- excluded rows: `1`
+- warnings: `4`
+- excluded row reason: cash-like row requires manual review
+- all ready rows include `IBKR_IMPORT_REVIEW_REQUIRED`
+
+Flex-style sample result:
+
+- review rows: `3`
+- ready holdings: `3`
+- excluded rows: `0`
+- warnings: `3`
+- all ready rows include `IBKR_IMPORT_REVIEW_REQUIRED`
+
+Combined sample result when both sample files are imported together with explicit metadata:
 
 - review rows: `7`
 - ready holdings: `6`

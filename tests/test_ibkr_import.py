@@ -13,7 +13,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from ai_pm_agent.portfolio.ibkr_import import import_ibkr_statement_files
+from ai_pm_agent.portfolio.ibkr_import import import_ibkr_statement_files, main
 from ai_pm_agent.portfolio.runner import run_from_paths
 
 
@@ -239,6 +239,36 @@ class IbkrStatementImportTests(unittest.TestCase):
             self.assertEqual(len(runner_result.snapshot.holdings), 1)
             self.assertTrue((tmp_path / "portfolio_report.md").exists())
             self.assertTrue((tmp_path / "portfolio_summary.json").exists())
+
+    def test_cli_accepts_statement_alias_and_default_portfolio_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source = tmp_path / "ibkr.csv"
+            _write_csv(
+                source,
+                ["Asset Category", "Currency", "Symbol", "Description", "Quantity", "Market Value", "Market Value in Base", "Security Type"],
+                [
+                    {
+                        "Asset Category": "Stocks",
+                        "Currency": "USD",
+                        "Symbol": "MSFT",
+                        "Description": "Microsoft Corp",
+                        "Quantity": "35",
+                        "Market Value": "16000",
+                        "Market Value in Base": "16000",
+                        "Security Type": "STK",
+                    }
+                ],
+            )
+            out_dir = tmp_path / "out"
+
+            exit_code = main(["--statement", str(source), "--out-dir", str(out_dir)])
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads((out_dir / "ibkr_import_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["portfolio_id"], "ibkr_import_review")
+            self.assertTrue((out_dir / "parsed_holdings_review.csv").exists())
+            self.assertTrue((out_dir / "portfolio_runner_ready_holdings.csv").exists())
 
 
 def _write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:

@@ -577,9 +577,20 @@ def _write_warnings_markdown(result: ImportResult) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Convert local IBKR statement CSV files into Phase 3C portfolio inputs.")
-    parser.add_argument("--input", action="append", required=True, help="Local IBKR CSV/Flex-style CSV file. Repeat for multiple files.")
+    parser.add_argument(
+        "--input",
+        "--statement",
+        dest="input",
+        action="append",
+        required=True,
+        help="Local IBKR CSV/Flex-style CSV file. Repeat for multiple files.",
+    )
     parser.add_argument("--out-dir", required=True, help="Output directory for review CSV, runner CSV, warnings, and JSON summary.")
-    parser.add_argument("--portfolio-id", required=True, help="Portfolio ID to write into the Phase 3C holdings CSV.")
+    parser.add_argument(
+        "--portfolio-id",
+        default="ibkr_import_review",
+        help="Portfolio ID to write into the Phase 3C holdings CSV. Defaults to ibkr_import_review.",
+    )
     parser.add_argument("--as-of-date", help="As-of date to write into outputs. Defaults to statement date if found.")
     parser.add_argument("--base-currency", default="USD", help="Portfolio base currency. Defaults to USD.")
     return parser

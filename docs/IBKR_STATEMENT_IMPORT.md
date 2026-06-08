@@ -10,15 +10,13 @@ From the repository root:
 
 ```powershell
 python .\scripts\ibkr_statement_import.py `
-  --input examples\portfolio\ibkr_statement_sample.csv `
-  --input examples\portfolio\ibkr_flex_sectioned_sample.csv `
-  --portfolio-id sample_ibkr_import `
-  --as-of-date 2026-06-08 `
-  --base-currency USD `
+  --statement examples\portfolio\ibkr_statement_sample.csv `
   --out-dir reports\ibkr_import
 ```
 
 The `reports/` directory is ignored by Git.
+
+Use repeated `--statement` arguments for multiple files. `--input` is accepted as an alias. If `--portfolio-id` is omitted, the adapter writes `ibkr_import_review`.
 
 ## Outputs
 
