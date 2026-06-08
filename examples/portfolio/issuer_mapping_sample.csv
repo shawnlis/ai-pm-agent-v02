@@ -1,0 +1,8 @@
+ticker,issuer_name,issuer_canonical_id,underlying_issuer_name,underlying_ticker,listing_country,country_of_risk,region
+7709.HK,SK Hynix,SK_HYNIX,SK Hynix,000660.KS,Hong Kong,South Korea,Asia
+TSLA,Tesla,TESLA,,,United States,United States,North America
+HY9H,SK Hynix,SK_HYNIX,SK Hynix,000660.KS,Germany,South Korea,Asia
+GOOGL,Alphabet,ALPHABET,,,United States,United States,North America
+MSFT,Microsoft,MICROSOFT,,,United States,United States,North America
+NVDA,NVIDIA,NVIDIA,,,United States,United States,North America
+SMS,Samsung Electronics,SAMSUNG_ELECTRONICS,Samsung Electronics,005930.KS,United Kingdom,South Korea,Asia

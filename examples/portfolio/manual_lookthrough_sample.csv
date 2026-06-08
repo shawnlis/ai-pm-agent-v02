@@ -1,0 +1,11 @@
+parent_ticker,component_issuer_name,component_issuer_canonical_id,component_ticker,component_weight,sector,industry,country_of_risk,region,themes,source_note
+TQQQ,Microsoft,MICROSOFT,MSFT,0.08,Information Technology,Software,United States,North America,cloud AI;mega-cap tech;AI infrastructure,Manual fake component.
+TQQQ,Alphabet,ALPHABET,GOOGL,0.05,Communication Services,Internet Content and Information,United States,North America,cloud AI;mega-cap tech,Manual fake component.
+TQQQ,NVIDIA,NVIDIA,NVDA,0.07,Information Technology,Semiconductors,United States,North America,AI infrastructure;semiconductor,Manual fake component.
+TQQQ,Tesla,TESLA,TSLA,0.03,Consumer Discretionary,Auto Manufacturers,United States,North America,EV / autonomy;mega-cap tech,Manual fake component.
+TQQQ,Nasdaq 100 residual,NASDAQ_100_RESIDUAL,,0.77,Diversified,Index residual,United States,North America,mega-cap tech,Manual fake residual.
+SOXL,NVIDIA,NVIDIA,NVDA,0.15,Information Technology,Semiconductors,United States,North America,AI infrastructure;semiconductor,Manual fake component.
+SOXL,SK Hynix,SK_HYNIX,000660.KS,0.05,Information Technology,Semiconductors,South Korea,Asia,HBM;semiconductor;AI infrastructure,Manual fake component.
+SOXL,Samsung Electronics,SAMSUNG_ELECTRONICS,005930.KS,0.05,Information Technology,Semiconductors,South Korea,Asia,HBM;semiconductor;AI infrastructure,Manual fake component.
+SOXL,Semiconductor basket residual,SEMICONDUCTOR_BASKET_RESIDUAL,,0.75,Information Technology,Semiconductors,Global,Global,semiconductor;AI infrastructure,Manual fake residual.
+ETHA,Ethereum,ETHEREUM,ETH,1.0,Digital Assets,Crypto asset,Global,Global,crypto beta,Manual fake underlying.

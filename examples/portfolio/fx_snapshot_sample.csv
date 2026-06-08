@@ -1,0 +1,3 @@
+currency,base_currency,fx_rate_to_base,as_of_date,source_note
+HKD,USD,0.128,2026-06-08,Fake static FX value for sample only.
+EUR,USD,1.08,2026-06-08,Fake static FX value for sample only.
