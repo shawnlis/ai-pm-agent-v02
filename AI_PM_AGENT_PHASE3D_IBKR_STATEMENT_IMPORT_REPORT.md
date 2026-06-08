@@ -80,8 +80,8 @@ Results:
 - adapter/script compile: passed
 - existing portfolio tests: `31 passed, 2 subtests passed`
 - Phase 3C runner tests: `11 passed`
-- Phase 3D IBKR adapter tests: `7 passed`
-- full pytest: `126 passed, 2 subtests passed`
+- Phase 3D IBKR adapter tests: `9 passed`
+- full pytest: `128 passed, 2 subtests passed`
 
 ## Sample Command
 
@@ -131,6 +131,7 @@ Combined sample result when both sample files are imported together with explici
 ## Known Limitations
 
 - The adapter does not verify imported holdings.
+- Missing or blank trading currency is defaulted to base currency only for review convenience and produces explicit warnings.
 - Cash-like rows are excluded and require manual review.
 - Issuer canonical IDs and taxonomy metadata still need manual review/enrichment.
 - Imported market values and FX-normalized values are trusted local statement inputs.

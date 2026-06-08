@@ -294,7 +294,13 @@ def _map_source_row(
     ticker = _normalize_ticker(_first_value(values, TICKER_ALIASES, row_warnings))
     name = _first_value(values, NAME_ALIASES, row_warnings)
     quantity_text = _first_value(values, QUANTITY_ALIASES, row_warnings)
-    trading_currency = (_first_value(values, TRADING_CURRENCY_ALIASES, row_warnings) or base_currency).upper()
+    trading_currency_text = _first_value(values, TRADING_CURRENCY_ALIASES, row_warnings)
+    if trading_currency_text:
+        trading_currency = trading_currency_text.upper()
+    else:
+        trading_currency = base_currency
+        label = ticker or name or "source row"
+        row_warnings.append(f"{label}: missing trading currency; defaulted to base currency {base_currency}")
     row_base_currency = (_first_value(values, BASE_CURRENCY_ALIASES, row_warnings) or base_currency).upper()
     market_value_local = _first_value(values, MARKET_VALUE_LOCAL_ALIASES, row_warnings)
     market_value_base = _first_value(values, MARKET_VALUE_BASE_ALIASES, row_warnings)

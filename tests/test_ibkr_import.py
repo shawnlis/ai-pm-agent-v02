@@ -202,6 +202,78 @@ class IbkrStatementImportTests(unittest.TestCase):
             self.assertEqual(len(result.ready_rows), 1)
             self.assertTrue(any("non-base-currency row lacks base value and FX rate" in warning for warning in result.warnings))
 
+    def test_missing_currency_column_warns_and_defaults_to_base_currency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source = tmp_path / "missing_currency_column.csv"
+            _write_csv(
+                source,
+                ["Asset Category", "Symbol", "Description", "Quantity", "Market Value", "Market Value in Base", "Security Type"],
+                [
+                    {
+                        "Asset Category": "Stocks",
+                        "Symbol": "MSFT",
+                        "Description": "Microsoft Corp",
+                        "Quantity": "35",
+                        "Market Value": "16000",
+                        "Market Value in Base": "16000",
+                        "Security Type": "STK",
+                    }
+                ],
+            )
+
+            result = import_ibkr_statement_files(
+                input_paths=[source],
+                out_dir=tmp_path / "out",
+                portfolio_id="test_ibkr",
+                as_of_date="2026-06-08",
+                base_currency="USD",
+            )
+
+            self.assertEqual(result.ready_rows[0]["trading_currency"], "USD")
+            self.assertIn("IBKR_IMPORT_REVIEW_REQUIRED", result.ready_rows[0]["notes"])
+            self.assertTrue(any("MSFT: missing trading currency; defaulted to base currency USD" in warning for warning in result.warnings))
+
+            review_rows = _read_csv(tmp_path / "out" / "parsed_holdings_review.csv")
+            self.assertIn("missing trading currency", review_rows[0]["warnings"])
+            warnings_markdown = (tmp_path / "out" / "ibkr_import_warnings.md").read_text(encoding="utf-8")
+            self.assertIn("missing trading currency; defaulted to base currency USD", warnings_markdown)
+            payload = json.loads((tmp_path / "out" / "ibkr_import_summary.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("missing trading currency; defaulted to base currency USD" in warning for warning in payload["warnings"]))
+
+    def test_blank_currency_warns_and_defaults_to_base_currency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            source = tmp_path / "blank_currency.csv"
+            _write_csv(
+                source,
+                ["Asset Category", "Currency", "Symbol", "Description", "Quantity", "Market Value", "Market Value in Base", "Security Type"],
+                [
+                    {
+                        "Asset Category": "Stocks",
+                        "Currency": "",
+                        "Symbol": "NVDA",
+                        "Description": "NVIDIA Corp",
+                        "Quantity": "10",
+                        "Market Value": "12000",
+                        "Market Value in Base": "12000",
+                        "Security Type": "STK",
+                    }
+                ],
+            )
+
+            result = import_ibkr_statement_files(
+                input_paths=[source],
+                out_dir=tmp_path / "out",
+                portfolio_id="test_ibkr",
+                as_of_date="2026-06-08",
+                base_currency="USD",
+            )
+
+            self.assertEqual(result.ready_rows[0]["trading_currency"], "USD")
+            self.assertIn("IBKR_IMPORT_REVIEW_REQUIRED", result.ready_rows[0]["notes"])
+            self.assertTrue(any("NVDA: missing trading currency; defaulted to base currency USD" in warning for warning in result.warnings))
+
     def test_runner_ready_output_can_feed_phase3c_runner_after_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

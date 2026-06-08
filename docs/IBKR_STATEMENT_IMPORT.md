@@ -66,11 +66,14 @@ The adapter maps common IBKR-style fields into the Phase 3C schema:
 
 The adapter intentionally leaves issuer canonical IDs, sector, industry, region, country-of-risk, themes, and leverage factors blank unless a local statement field directly supplies a supported value. These should be reviewed or enriched manually before portfolio exposure reporting.
 
+If a source row is missing a trading currency, the adapter defaults that row to the selected base currency only so the review files stay usable. This fallback is not verified currency data and must be checked against the original statement before exposure reporting.
+
 ## Warning Behavior
 
 The adapter warns on:
 
 - ambiguous values across equivalent fields
+- missing or blank trading currency; these rows are defaulted to base currency for review convenience only
 - missing ticker
 - missing or invalid quantity
 - missing market value
@@ -92,6 +95,7 @@ Before using `portfolio_runner_ready_holdings.csv` in the Phase 3C exposure runn
 - add or review issuer canonical IDs
 - add or review sector, industry, region, country-of-risk, and themes
 - confirm the as-of date and base currency
+- treat any base-currency fallback for missing trading currency as unverified until manually corrected or confirmed
 
 The adapter output is a local import-review artifact only. It is not investment advice, trading advice, suitability advice, tax advice, or a PM recommendation.
 
