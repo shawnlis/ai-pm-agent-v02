@@ -156,6 +156,90 @@ class PortfolioRunnerTests(unittest.TestCase):
             self.assertEqual(result.snapshot.holdings[0].market_value_base, 125.0)
             self.assertFalse(any("missing FX" in warning for warning in result.warnings))
 
+    def test_currency_exposure_uses_base_market_value_not_raw_local_units(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            holdings = tmp_path / "holdings.csv"
+            _write_csv(
+                holdings,
+                HOLDINGS_FIELDS,
+                [
+                    _holding_row(
+                        ticker="7709.HK",
+                        market_value_local="80000",
+                        trading_currency="HKD",
+                        base_currency="USD",
+                        fx_rate_to_base="0.128",
+                        market_value_base="",
+                        issuer_canonical_id="SK_HYNIX",
+                        sector="Information Technology",
+                        industry="Semiconductors",
+                        region="Asia",
+                        country_of_risk="South Korea",
+                    ),
+                    _holding_row(
+                        ticker="MSFT",
+                        market_value_local="20000",
+                        trading_currency="USD",
+                        base_currency="USD",
+                        market_value_base="20000",
+                        issuer_canonical_id="MICROSOFT",
+                    ),
+                ],
+            )
+            summary = tmp_path / "summary.json"
+
+            run_from_paths(holdings_path=holdings, out_path=tmp_path / "report.md", json_out_path=summary)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            exposure = payload["exposures"]["currency_exposure_base_value"]
+
+            expected_hkd = 10240.0 / 30240.0
+            self.assertAlmostEqual(exposure["HKD"], expected_hkd)
+            self.assertLess(exposure["HKD"], 0.40)
+            self.assertNotIn("currency", payload["exposures"])
+
+    def test_currency_exposure_warns_and_excludes_missing_base_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            holdings = tmp_path / "holdings.csv"
+            _write_csv(
+                holdings,
+                HOLDINGS_FIELDS,
+                [
+                    _holding_row(
+                        ticker="EURMISSING",
+                        market_value_local="100000",
+                        trading_currency="EUR",
+                        base_currency="USD",
+                        fx_rate_to_base="",
+                        market_value_base="",
+                        issuer_canonical_id="EUR_ISSUER",
+                    ),
+                    _holding_row(
+                        ticker="MSFT",
+                        market_value_local="1000",
+                        trading_currency="USD",
+                        base_currency="USD",
+                        market_value_base="1000",
+                        issuer_canonical_id="MICROSOFT",
+                    ),
+                ],
+            )
+            summary = tmp_path / "summary.json"
+
+            result = run_from_paths(holdings_path=holdings, out_path=tmp_path / "report.md", json_out_path=summary)
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+
+            self.assertIn("USD", payload["exposures"]["currency_exposure_base_value"])
+            self.assertNotIn("EUR", payload["exposures"]["currency_exposure_base_value"])
+            self.assertTrue(
+                any(
+                    "EURMISSING: excluded from base-value currency exposure because base market value is missing"
+                    in warning
+                    for warning in result.warnings
+                )
+            )
+
     def test_issuer_and_taxonomy_mapping_application(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

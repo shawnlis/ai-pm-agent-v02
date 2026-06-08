@@ -22,7 +22,6 @@ from ai_pm_agent.portfolio.exposure import (
     calculate_base_market_value_exposure,
     calculate_concentration_summary,
     calculate_country_of_risk_exposure,
-    calculate_currency_exposure,
     calculate_industry_exposure,
     calculate_instrument_type_exposure,
     calculate_issuer_exposure,
@@ -230,7 +229,7 @@ def build_run_result(
         "issuer": calculate_issuer_exposure(snapshot),
         "instrument_type": calculate_instrument_type_exposure(snapshot),
         "theme": calculate_theme_exposure(snapshot),
-        "currency": calculate_currency_exposure(snapshot),
+        "currency_exposure_base_value": _calculate_currency_exposure_by_base_value(snapshot, warnings),
         "base_market_value": calculate_base_market_value_exposure(snapshot),
         "lookthrough_sector": calculate_lookthrough_sector_exposure(snapshot),
         "lookthrough_issuer": calculate_lookthrough_exposure(snapshot, "issuer"),
@@ -291,7 +290,7 @@ def write_markdown_report(result: PortfolioRunResult, out_path: Path) -> None:
         "",
         _exposure_section("Theme Exposure", result.exposures["theme"]),
         "",
-        _exposure_section("Currency Exposure", result.exposures["currency"]),
+        _exposure_section("Currency Exposure by Base Market Value", result.exposures["currency_exposure_base_value"]),
         "",
         _exposure_section("Base-Market-Value Exposure", result.exposures["base_market_value"]),
         "",
@@ -550,6 +549,42 @@ def _split_themes(value: Any) -> list[str]:
     if len(parts) == 1 and "," in text:
         parts = text.split(",")
     return [part.strip() for part in parts if part.strip()]
+
+
+def _calculate_currency_exposure_by_base_value(
+    snapshot: PortfolioSnapshot,
+    warnings: list[str],
+) -> dict[str, float]:
+    exposure_values: dict[str, float] = {}
+
+    for holding in snapshot.holdings:
+        currency = (holding.trading_currency or holding.currency or snapshot.base_currency).upper()
+        base_value = _safe_currency_base_value(holding, snapshot.base_currency)
+        if base_value is None:
+            warnings.append(
+                f"{holding.ticker}: excluded from base-value currency exposure because base market value is missing"
+            )
+            continue
+        exposure_values[currency] = exposure_values.get(currency, 0.0) + base_value
+
+    denominator = sum(exposure_values.values())
+    if denominator == 0:
+        return {}
+    return dict(sorted((currency, value / denominator) for currency, value in exposure_values.items()))
+
+
+def _safe_currency_base_value(holding: Holding, portfolio_base_currency: str) -> float | None:
+    if holding.market_value_base is not None:
+        return holding.market_value_base
+    if holding.market_value_local is not None and holding.fx_rate_to_base is not None:
+        return holding.market_value_local * holding.fx_rate_to_base
+
+    trading_currency = (holding.trading_currency or holding.currency or "").upper()
+    holding_base_currency = (holding.base_currency or portfolio_base_currency or "").upper()
+    portfolio_base = portfolio_base_currency.upper()
+    if trading_currency == portfolio_base and holding_base_currency == portfolio_base:
+        return calculate_base_market_value(holding)
+    return None
 
 
 def _portfolio_id_from_notes(notes: str | None) -> str:

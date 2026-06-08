@@ -134,6 +134,7 @@ The runner:
 - builds a `PortfolioSnapshot`
 - fills missing issuer/taxonomy fields from optional mappings when supplied
 - fills missing FX rates from the optional FX snapshot when supplied
+- weights report currency exposure by base market value, not raw local-currency units
 - produces Markdown and optional JSON output
 - handles missing optional input files by warning and continuing
 - keeps line-item exposure and manual look-through exposure separate
@@ -145,8 +146,23 @@ The runner emits warnings for:
 - missing taxonomy metadata
 - missing FX rates for non-base-currency holdings
 - missing base/local values
+- rows excluded from base-value currency exposure because no safe base value is available
 - manual look-through weights that do not sum to 100%
 - mixed portfolio IDs or as-of dates in the holdings file
+
+## Currency Exposure
+
+`Currency Exposure by Base Market Value` groups holdings by trading currency and weights those currencies using base-currency market value.
+
+The runner does not sum raw local values across currencies. For example, an HKD holding with `market_value_local=80000`, `fx_rate_to_base=0.128`, and `base_currency=USD` contributes USD 10,240 to currency exposure, not 80,000 local units.
+
+Currency exposure uses:
+
+- `market_value_base` when supplied
+- `market_value_local * fx_rate_to_base` when both are supplied
+- same-currency market value fallback only when the holding currency already matches the portfolio base currency
+
+If a non-base-currency holding lacks a safe base value, the runner warns and excludes that row from base-value currency exposure.
 
 ## Report Output
 
@@ -163,7 +179,7 @@ The Markdown report includes:
 - issuer exposure
 - instrument-type exposure
 - theme exposure
-- currency exposure
+- currency exposure by base market value
 - base-market-value exposure
 - leverage-adjusted gross exposure
 - concentration summary
@@ -179,6 +195,7 @@ The JSON summary includes:
 - `warnings`
 - `input_files`
 - `exposures`
+- `exposures.currency_exposure_base_value`
 - `leverage_adjusted_gross_exposure`
 - `concentration`
 - `lookthrough_summary`

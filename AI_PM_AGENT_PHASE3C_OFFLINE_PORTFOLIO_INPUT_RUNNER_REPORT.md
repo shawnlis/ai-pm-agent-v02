@@ -12,6 +12,8 @@ This branch adds a narrow offline portfolio input runner for Phase 3C. The runne
 
 This is a local reporting tool only. It does not modify `ai_pm_agent.py`, PM decision logic, PM recommendation logic, research execution, or company DB behavior.
 
+PR #4 review follow-up: runner currency exposure is reported as `Currency Exposure by Base Market Value`, using base-currency market value rather than raw local-currency units.
+
 ## Files Added
 
 - `src/ai_pm_agent/portfolio/runner.py`
@@ -62,6 +64,7 @@ The runner:
 - builds a `PortfolioSnapshot`
 - applies optional issuer and taxonomy mappings deterministically
 - applies optional FX snapshots deterministically
+- reports mixed-currency exposure by base market value, not raw local-currency units
 - keeps line-item exposure and manual look-through exposure separate
 - emits warnings for missing inputs, missing mappings, missing FX, missing base values, and look-through weights not summing to 100%
 - writes Markdown and JSON summaries
@@ -94,8 +97,8 @@ Results:
 - portfolio module compile: passed
 - runner compile: passed
 - targeted portfolio tests: `31 passed, 2 subtests passed`
-- runner tests: `9 passed`
-- full pytest: `117 passed, 2 subtests passed`
+- runner tests: `11 passed`
+- full pytest: `119 passed, 2 subtests passed`
 
 Sample command run:
 
