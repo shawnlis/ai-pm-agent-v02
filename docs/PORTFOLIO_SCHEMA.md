@@ -15,6 +15,30 @@ If `market_value` is missing and `current_price` is available, the model compute
 
 `TQQQ` and `SOXL` default to a `3.0` leverage multiplier when no explicit multiplier is provided.
 
+Phase 3B adds optional metadata fields for more realistic holdings:
+
+- `instrument_type`
+- `issuer_name`
+- `issuer_canonical_id`
+- `underlying_issuer_name`
+- `underlying_ticker`
+- `listing_country`
+- `country_of_risk`
+- `region`
+- `sector`
+- `industry`
+- `trading_currency`
+- `base_currency`
+- `fx_rate_to_base`
+- `market_value_local`
+- `market_value_base`
+- `leverage_factor`
+- `lookthrough_available`
+- `lookthrough_source`
+- `lookthrough_components`
+
+These fields are additive. They do not change PM recommendations, research execution, company database behavior, ratings, or actions.
+
 ## PortfolioSnapshot
 
 `PortfolioSnapshot` is a point-in-time view of holdings plus cash. It computes:
@@ -29,11 +53,65 @@ If `market_value` is missing and `current_price` is available, the model compute
 - Asset class exposure
 - Currency exposure
 - Risk bucket exposure
+- Sector exposure
+- Industry exposure
+- Region exposure
+- Country-of-risk exposure
+- Issuer exposure
+- Instrument-type exposure
+- Base-currency holding weights
 - Incomplete valuation holdings
 
 ## Leveraged ETFs
 
 Leveraged ETFs need leverage-adjusted exposure because their account market value understates their economic exposure. A 10% TQQQ position is roughly 30% Nasdaq exposure before fees, path dependency, and daily reset effects.
+
+`leverage_factor` is accepted as additive metadata and feeds the same calculation path as `leverage_multiplier` when supplied.
+
+## Issuer And Listing Metadata
+
+Foreign listings, ADRs, GDS lines, and local listings can be grouped with `issuer_canonical_id`.
+
+For example, an ADR line and a Hong Kong local listing can both use the same canonical issuer key so exposure helpers can summarize issuer-level concentration without changing the original tickers.
+
+`market`, `listing_country`, `country_of_risk`, and `region` are intentionally separate:
+
+- `market` identifies where the security trades.
+- `listing_country` identifies the listing venue country.
+- `country_of_risk` captures the economic issuer risk.
+- `region` provides a broader geographic bucket.
+
+## FX And Base-Currency Values
+
+The schema supports manually supplied FX normalization through `market_value_local`, `fx_rate_to_base`, and `market_value_base`.
+
+No FX rates are fetched. If base-currency exposure is used, the caller must supply fake, fixture, or locally approved FX inputs.
+
+## Manual Look-Through
+
+`LookThroughComponent` supports manually supplied look-through metadata for ETFs, funds, crypto ETFs, or index-like instruments.
+
+Allowed:
+
+- manual component issuer
+- manual component ticker
+- manual component weight
+- manual component sector
+- manual component country of risk
+- manual component region
+- manual component theme tags
+- source notes
+
+Not allowed in this module:
+
+- auto-fetching ETF constituents
+- live market data
+- yfinance calls
+- LLM calls
+- broker sync
+- external provider look-through
+
+If no manual look-through exists, look-through helpers can fall back to line-item metadata. Original line-item exposure remains separate from manual look-through exposure.
 
 ## ETHA Classification
 
@@ -41,7 +119,7 @@ Leveraged ETFs need leverage-adjusted exposure because their account market valu
 
 ## Fixture Usage
 
-`build_sample_portfolio_snapshot()` returns fake test data for TQQQ, SOXL, NVDA, SK Hynix proxy / HY9H / 7709.HK, MU, GOOGL, MSFT, TSLA, ETHA, and cash.
+`build_sample_portfolio_snapshot()` returns fake test data for TQQQ, SOXL, NVDA, SK Hynix proxy / HY9H / 7709.HK, MU, GOOGL, MSFT, TSLA, ETHA, SMS, and cash.
 
 ```python
 from ai_pm_agent.portfolio import build_sample_portfolio_snapshot
@@ -49,4 +127,10 @@ from ai_pm_agent.portfolio import build_sample_portfolio_snapshot
 snapshot = build_sample_portfolio_snapshot()
 print(snapshot.leverage_adjusted_exposure)
 print(snapshot.theme_exposure)
+print(snapshot.sector_exposure)
+print(snapshot.issuer_exposure)
 ```
+
+## Advice Boundary
+
+Exposure output is informational only. Portfolio metadata is not used for suitability advice, trading advice, client advice, PM recommendation changes, rating changes, or action changes.

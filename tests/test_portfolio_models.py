@@ -12,7 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from ai_pm_agent.portfolio.fixtures import build_sample_portfolio_snapshot
-from ai_pm_agent.portfolio.models import Holding, PortfolioSnapshot
+from ai_pm_agent.portfolio.models import Holding, LookThroughComponent, PortfolioSnapshot
 
 
 class HoldingModelTests(unittest.TestCase):
@@ -65,6 +65,75 @@ class HoldingModelTests(unittest.TestCase):
         self.assertEqual(holding.risk_bucket, "crypto_beta")
         self.assertNotEqual(holding.asset_class, "equity")
 
+    def test_optional_metadata_fields_are_preserved(self) -> None:
+        holding = Holding(
+            ticker="9988.hk",
+            quantity=80,
+            market_value_local=800.0,
+            trading_currency="hkd",
+            base_currency="usd",
+            fx_rate_to_base=0.125,
+            instrument_type="stock",
+            issuer_name="Alibaba Group",
+            issuer_canonical_id="ALIBABA",
+            underlying_ticker="baba",
+            listing_country="Hong Kong",
+            country_of_risk="China",
+            region="Asia",
+            sector="Consumer Discretionary",
+            industry="Internet Retail",
+            themes=["cloud AI", "China internet"],
+        )
+
+        self.assertEqual(holding.ticker, "9988.HK")
+        self.assertEqual(holding.currency, "HKD")
+        self.assertEqual(holding.trading_currency, "HKD")
+        self.assertEqual(holding.base_currency, "USD")
+        self.assertEqual(holding.underlying_ticker, "BABA")
+        self.assertEqual(holding.market_value, 800.0)
+        self.assertEqual(holding.market_value_base, 100.0)
+        self.assertEqual(holding.theme, ["cloud AI", "China internet"])
+        self.assertEqual(holding.themes, holding.theme)
+
+    def test_leverage_factor_alias_feeds_multiplier(self) -> None:
+        holding = Holding(ticker="CUSTOM3X", quantity=1, market_value=100.0, leverage_factor=3.0)
+
+        self.assertEqual(holding.leverage_multiplier, 3.0)
+        self.assertEqual(holding.leverage_factor, 3.0)
+
+    def test_manual_lookthrough_component_validation(self) -> None:
+        component = LookThroughComponent(
+            holding_ticker="tqqq",
+            component_issuer_name="NVIDIA",
+            component_ticker="nvda",
+            component_weight=0.25,
+            sector="Information Technology",
+            theme=["AI infrastructure"],
+        )
+
+        self.assertEqual(component.holding_ticker, "TQQQ")
+        self.assertEqual(component.component_ticker, "NVDA")
+        self.assertEqual(component.theme, ["AI infrastructure"])
+
+        with self.assertRaises(ValueError):
+            LookThroughComponent(component_weight=1.1)
+
+    def test_holding_with_lookthrough_marks_availability(self) -> None:
+        holding = Holding(
+            ticker="TQQQ",
+            quantity=1,
+            market_value=100.0,
+            lookthrough_components=[
+                LookThroughComponent(
+                    component_issuer_name="NVIDIA",
+                    component_weight=1.0,
+                    sector="Information Technology",
+                )
+            ],
+        )
+
+        self.assertTrue(holding.lookthrough_available)
+
 
 class PortfolioSnapshotTests(unittest.TestCase):
     def test_computed_totals_cash_and_weights(self) -> None:
@@ -105,9 +174,63 @@ class PortfolioSnapshotTests(unittest.TestCase):
 
         self.assertGreater(snapshot.cash, 0)
         self.assertEqual(snapshot.cash_currency, "USD")
-        self.assertTrue({"TQQQ", "SOXL", "NVDA", "7709.HK", "MU", "GOOGL", "MSFT", "TSLA", "ETHA"}.issubset(tickers))
+        self.assertTrue(
+            {
+                "TQQQ",
+                "SOXL",
+                "NVDA",
+                "7709.HK",
+                "HY9H",
+                "MU",
+                "GOOGL",
+                "MSFT",
+                "TSLA",
+                "ETHA",
+                "SMS",
+            }.issubset(tickers)
+        )
         self.assertEqual(next(holding for holding in snapshot.holdings if holding.ticker == "TQQQ").leverage_multiplier, 3.0)
         self.assertEqual(next(holding for holding in snapshot.holdings if holding.ticker == "SOXL").leverage_multiplier, 3.0)
+        self.assertEqual(next(holding for holding in snapshot.holdings if holding.ticker == "HY9H").issuer_canonical_id, "SK_HYNIX")
+        self.assertTrue(next(holding for holding in snapshot.holdings if holding.ticker == "SOXL").lookthrough_available)
+
+    def test_snapshot_metadata_exposure_properties(self) -> None:
+        snapshot = PortfolioSnapshot(
+            as_of_date="2026-06-06",
+            cash=100.0,
+            holdings=[
+                Holding(
+                    ticker="BABA",
+                    quantity=1,
+                    market_value_base=200.0,
+                    issuer_canonical_id="ALIBABA",
+                    country_of_risk="China",
+                    region="Asia",
+                    sector="Consumer Discretionary",
+                    industry="Internet Retail",
+                    instrument_type="adr",
+                ),
+                Holding(
+                    ticker="9988.HK",
+                    quantity=1,
+                    market_value_local=800.0,
+                    fx_rate_to_base=0.125,
+                    currency="HKD",
+                    issuer_canonical_id="ALIBABA",
+                    country_of_risk="China",
+                    region="Asia",
+                    sector="Consumer Discretionary",
+                    industry="Internet Retail",
+                    instrument_type="stock",
+                ),
+            ],
+        )
+
+        self.assertEqual(snapshot.total_base_market_value, 300.0)
+        self.assertEqual(snapshot.total_base_equity_value, 400.0)
+        self.assertAlmostEqual(snapshot.issuer_exposure["ALIBABA"], 300.0 / 400.0)
+        self.assertAlmostEqual(snapshot.country_of_risk_exposure["China"], 300.0 / 400.0)
+        self.assertAlmostEqual(snapshot.sector_exposure["Consumer Discretionary"], 300.0 / 400.0)
 
 
 if __name__ == "__main__":
