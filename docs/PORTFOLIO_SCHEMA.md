@@ -39,6 +39,24 @@ Phase 3B adds optional metadata fields for more realistic holdings:
 
 These fields are additive. They do not change PM recommendations, research execution, company database behavior, ratings, or actions.
 
+## Local Taxonomy Values
+
+Portfolio metadata taxonomy values are currently local, user-supplied strings.
+
+This applies to:
+
+- `instrument_type`
+- `sector`
+- `industry`
+- `region`
+- `country_of_risk`
+- `theme`
+- `risk_bucket`
+
+Recommended `instrument_type` examples include `stock`, `etf`, `leveraged_etf`, `crypto_etf`, `gds`, `adr`, `cash`, `fund`, `note`, and `other`.
+
+These values are not yet normalized to an external standard such as GICS, BICS, ISO country codes, MSCI regions, broker taxonomies, or data-provider classifications. Future normalization should be additive and backward compatible: existing local strings should remain valid, and any provider-standard mapping should live beside them rather than replacing them silently.
+
 ## PortfolioSnapshot
 
 `PortfolioSnapshot` is a point-in-time view of holdings plus cash. It computes:
@@ -68,6 +86,8 @@ Leveraged ETFs need leverage-adjusted exposure because their account market valu
 
 `leverage_factor` is accepted as additive metadata and feeds the same calculation path as `leverage_multiplier` when supplied.
 
+Leverage-adjusted gross exposure is a deterministic notional-style reporting helper based on supplied market value and supplied leverage factor. It is not VaR, stress loss, margin requirement, risk-adjusted exposure, beta-adjusted exposure, or portfolio risk advice.
+
 ## Issuer And Listing Metadata
 
 Foreign listings, ADRs, GDS lines, and local listings can be grouped with `issuer_canonical_id`.
@@ -86,6 +106,18 @@ For example, an ADR line and a Hong Kong local listing can both use the same can
 The schema supports manually supplied FX normalization through `market_value_local`, `fx_rate_to_base`, and `market_value_base`.
 
 No FX rates are fetched. If base-currency exposure is used, the caller must supply fake, fixture, or locally approved FX inputs.
+
+Exposure helpers treat supplied base values as user-provided inputs, not market-verified data.
+
+Current fallback behavior:
+
+- `market_value_base` is used when supplied.
+- If `market_value_base` is missing and both `market_value_local` and `fx_rate_to_base` are supplied, base value is computed as `market_value_local * fx_rate_to_base`.
+- If base fields are missing, base-value helpers fall back to the holding's regular `market_value`.
+- If `market_value` is missing and `current_price` is supplied, the holding model computes `quantity * current_price`.
+- `PortfolioSnapshot.cash` is treated as already being in `PortfolioSnapshot.base_currency`; multi-currency cash is not modeled yet.
+
+These fallbacks make local fixtures convenient, but they do not certify that values are live, current, or FX-normalized.
 
 ## Manual Look-Through
 
@@ -112,6 +144,8 @@ Not allowed in this module:
 - external provider look-through
 
 If no manual look-through exists, look-through helpers can fall back to line-item metadata. Original line-item exposure remains separate from manual look-through exposure.
+
+If manual look-through components are supplied for a holding, the helper uses only those supplied components for that holding's look-through view. Component residuals are not inferred automatically. If components sum to less than 100%, the unmodeled residual is omitted unless the caller supplies a residual component. If components sum above 100%, the helper does not rebalance them; the caller is responsible for supplying coherent manual weights.
 
 ## ETHA Classification
 
