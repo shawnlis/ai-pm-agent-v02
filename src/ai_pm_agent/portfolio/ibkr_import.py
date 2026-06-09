@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -51,6 +53,7 @@ REVIEW_FIELDS = [
     "parse_status",
     "review_required",
     "warnings",
+    "warning_codes",
     *PHASE3C_HOLDINGS_FIELDS,
     "ibkr_asset_category",
     "ibkr_security_type",
@@ -63,7 +66,9 @@ REVIEW_FIELDS = [
 SUMMARY_FILE = "ibkr_import_summary.json"
 WARNINGS_FILE = "ibkr_import_warnings.md"
 REVIEW_FILE = "parsed_holdings_review.csv"
-READY_FILE = "portfolio_runner_ready_holdings.csv"
+CANDIDATE_FILE = "staged_unverified_holdings.csv"
+LEGACY_READY_FILE = "portfolio_runner_ready_holdings.csv"
+MANIFEST_FILE = "ibkr_review_manifest.json"
 
 TICKER_ALIASES = ["symbol", "ticker", "local symbol", "ibkr symbol"]
 NAME_ALIASES = ["description", "name", "security description"]
@@ -92,6 +97,33 @@ DATE_ALIASES = ["as of date", "date", "report date", "statement date"]
 
 CASH_ASSET_MARKERS = {"cash", "cash and cash equivalents", "forex", "fx", "money market"}
 SUPPORTED_POSITION_SECTIONS = {"open positions", "positions", "open position", "position"}
+SUPPORTED_CANDIDATE_INSTRUMENT_TYPES = {"stock", "etf", "leveraged_etf", "crypto_etf"}
+
+MISSING_CURRENCY = "MISSING_CURRENCY"
+MISSING_MARKET_VALUE = "MISSING_MARKET_VALUE"
+MISSING_TICKER = "MISSING_TICKER"
+MISSING_QUANTITY = "MISSING_QUANTITY"
+INVALID_QUANTITY = "INVALID_QUANTITY"
+CASH_LIKE_ROW_EXCLUDED = "CASH_LIKE_ROW_EXCLUDED"
+UNKNOWN_INSTRUMENT_TYPE = "UNKNOWN_INSTRUMENT_TYPE"
+NEGATIVE_QUANTITY = "NEGATIVE_QUANTITY"
+NON_BASE_CURRENCY_MISSING_FX = "NON_BASE_CURRENCY_MISSING_FX"
+MANUAL_REVIEW_REQUIRED = "MANUAL_REVIEW_REQUIRED"
+IBKR_IMPORT_REVIEW_REQUIRED = "IBKR_IMPORT_REVIEW_REQUIRED"
+UNSUPPORTED_INSTRUMENT_TYPE = "UNSUPPORTED_INSTRUMENT_TYPE"
+
+BLOCKING_ISSUE_CODES = {
+    MISSING_CURRENCY,
+    MISSING_MARKET_VALUE,
+    MISSING_TICKER,
+    MISSING_QUANTITY,
+    INVALID_QUANTITY,
+    CASH_LIKE_ROW_EXCLUDED,
+    UNKNOWN_INSTRUMENT_TYPE,
+    NEGATIVE_QUANTITY,
+    NON_BASE_CURRENCY_MISSING_FX,
+    UNSUPPORTED_INSTRUMENT_TYPE,
+}
 
 
 class IbkrImportError(ValueError):
@@ -116,10 +148,11 @@ class ImportResult:
     review_rows: list[dict[str, str]]
     ready_rows: list[dict[str, str]]
     warnings: list[str]
+    total_rows_seen: int
 
     @property
     def summary(self) -> dict[str, Any]:
-        excluded = sum(1 for row in self.review_rows if row["parse_status"] == "excluded")
+        excluded = _excluded_row_count(self.review_rows)
         return {
             "portfolio_id": self.portfolio_id,
             "as_of_date": self.as_of_date,
@@ -127,18 +160,56 @@ class ImportResult:
             "input_files": self.input_files,
             "output_files": self.output_files,
             "counts": {
+                "total_rows_seen": self.total_rows_seen,
                 "review_rows": len(self.review_rows),
+                "candidate_holdings": len(self.ready_rows),
                 "ready_holdings": len(self.ready_rows),
                 "excluded_rows": excluded,
                 "warnings": len(self.warnings),
             },
             "warnings": self.warnings,
+            "warnings_by_code": _warnings_by_code(self.review_rows),
+            "excluded_by_reason": _excluded_by_reason(self.review_rows),
             "review_required": True,
+            "verified": False,
             "offline_only": True,
             "notes": [
                 "No IBKR connection was used.",
                 "No broker API was used.",
-                "Imported holdings are not verified until a human reviews parsed_holdings_review.csv and ibkr_import_warnings.md.",
+                "Imported holdings are staged candidates only and remain unverified until a human reviews parsed_holdings_review.csv, staged_unverified_holdings.csv, ibkr_import_warnings.md, and ibkr_review_manifest.json.",
+                "portfolio_runner_ready_holdings.csv is emitted only as a deprecated compatibility file for this version.",
+            ],
+        }
+
+    @property
+    def review_manifest(self) -> dict[str, Any]:
+        source_files = [{"path": path, "sha256": _sha256(Path(path))} for path in self.input_files]
+        source_file = source_files[0]["path"] if len(source_files) == 1 else "multiple"
+        source_file_sha256 = source_files[0]["sha256"] if len(source_files) == 1 else ""
+        warnings_by_code = _warnings_by_code(self.review_rows)
+        excluded_by_reason = _excluded_by_reason(self.review_rows)
+        return {
+            "source_file": source_file,
+            "source_file_sha256": source_file_sha256,
+            "source_files": source_files,
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "offline_only": True,
+            "review_required": True,
+            "verified": False,
+            "total_rows_seen": self.total_rows_seen,
+            "parsed_review_rows": len(self.review_rows),
+            "candidate_rows": len(self.ready_rows),
+            "excluded_rows": _excluded_row_count(self.review_rows),
+            "warning_count": len(self.warnings),
+            "blocking_issue_count": sum(count for code, count in warnings_by_code.items() if code in BLOCKING_ISSUE_CODES),
+            "warnings_by_code": warnings_by_code,
+            "excluded_by_reason": excluded_by_reason,
+            "base_currency": self.base_currency,
+            "output_files": self.output_files,
+            "notes": [
+                "Human review is required before using staged_unverified_holdings.csv in exposure reports.",
+                "Candidate holdings are not verified account data and are not investment advice.",
+                "portfolio_runner_ready_holdings.csv is deprecated compatibility output and has the same unverified review-required rows.",
             ],
         }
 
@@ -187,9 +258,11 @@ def import_ibkr_statement_files(
 
     output_files = {
         "parsed_holdings_review": str(out_path / REVIEW_FILE),
-        "portfolio_runner_ready_holdings": str(out_path / READY_FILE),
+        "staged_unverified_holdings": str(out_path / CANDIDATE_FILE),
+        "portfolio_runner_ready_holdings": str(out_path / LEGACY_READY_FILE),
         "warnings": str(out_path / WARNINGS_FILE),
         "summary": str(out_path / SUMMARY_FILE),
+        "review_manifest": str(out_path / MANIFEST_FILE),
     }
 
     result = ImportResult(
@@ -201,11 +274,17 @@ def import_ibkr_statement_files(
         review_rows=review_rows,
         ready_rows=ready_rows,
         warnings=sorted(set(warnings)),
+        total_rows_seen=len(source_rows),
     )
     _write_csv(Path(output_files["parsed_holdings_review"]), REVIEW_FIELDS, result.review_rows)
+    _write_csv(Path(output_files["staged_unverified_holdings"]), PHASE3C_HOLDINGS_FIELDS, result.ready_rows)
     _write_csv(Path(output_files["portfolio_runner_ready_holdings"]), PHASE3C_HOLDINGS_FIELDS, result.ready_rows)
     _write_warnings_markdown(result)
     Path(output_files["summary"]).write_text(json.dumps(result.summary, indent=2, sort_keys=True), encoding="utf-8")
+    Path(output_files["review_manifest"]).write_text(
+        json.dumps(result.review_manifest, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     return result
 
 
@@ -287,6 +366,7 @@ def _map_source_row(
     warnings: list[str],
 ) -> tuple[dict[str, str], dict[str, str] | None]:
     row_warnings: list[str] = []
+    row_warning_codes: list[str] = [IBKR_IMPORT_REVIEW_REQUIRED]
     values = source_row.values
 
     asset_category = _first_value(values, ASSET_CATEGORY_ALIASES, row_warnings)
@@ -300,7 +380,12 @@ def _map_source_row(
     else:
         trading_currency = base_currency
         label = ticker or name or "source row"
-        row_warnings.append(f"{label}: missing trading currency; defaulted to base currency {base_currency}")
+        _add_row_warning(
+            row_warnings,
+            row_warning_codes,
+            MISSING_CURRENCY,
+            f"{label}: missing trading currency; defaulted to base currency {base_currency}",
+        )
     row_base_currency = (_first_value(values, BASE_CURRENCY_ALIASES, row_warnings) or base_currency).upper()
     market_value_local = _first_value(values, MARKET_VALUE_LOCAL_ALIASES, row_warnings)
     market_value_base = _first_value(values, MARKET_VALUE_BASE_ALIASES, row_warnings)
@@ -313,7 +398,7 @@ def _map_source_row(
     isin = _first_value(values, ISIN_ALIASES, row_warnings)
     account = _first_value(values, ACCOUNT_ALIASES, row_warnings)
 
-    instrument_type = _instrument_type(asset_category, security_type, row_warnings)
+    instrument_type = _instrument_type(asset_category, security_type, row_warnings, row_warning_codes)
     notes = _notes(source_row, asset_category, security_type, conid, isin, exchange, account)
 
     parse_status = "ready_for_review"
@@ -321,18 +406,23 @@ def _map_source_row(
 
     if _is_cash_like(asset_category, security_type, ticker):
         parse_status = "excluded"
-        row_warnings.append("cash-like row not converted; multi-currency cash requires manual review")
+        _add_row_warning(
+            row_warnings,
+            row_warning_codes,
+            CASH_LIKE_ROW_EXCLUDED,
+            "cash-like row not converted; multi-currency cash requires manual review",
+        )
     elif not ticker:
         parse_status = "excluded"
-        row_warnings.append("missing ticker; row excluded")
+        _add_row_warning(row_warnings, row_warning_codes, MISSING_TICKER, "missing ticker; row excluded")
     elif not quantity_text:
         parse_status = "excluded"
-        row_warnings.append("missing quantity; row excluded")
+        _add_row_warning(row_warnings, row_warning_codes, MISSING_QUANTITY, "missing quantity; row excluded")
     else:
         quantity = _parse_number_text(quantity_text, "quantity", row_warnings)
         if quantity is None:
             parse_status = "excluded"
-            row_warnings.append("invalid quantity; row excluded")
+            _add_row_warning(row_warnings, row_warning_codes, INVALID_QUANTITY, "invalid quantity; row excluded")
         else:
             local_value = _parse_number_text(market_value_local, "market_value_local", row_warnings)
             base_value = _parse_number_text(market_value_base, "market_value_base", row_warnings)
@@ -344,36 +434,73 @@ def _map_source_row(
             if fx_rate_to_base and fx_rate is None:
                 fx_rate_to_base = ""
             if not market_value_local and not market_value_base:
-                row_warnings.append("missing market value; output row requires human valuation review")
+                _add_row_warning(
+                    row_warnings,
+                    row_warning_codes,
+                    MISSING_MARKET_VALUE,
+                    "missing market value; output row requires human valuation review",
+                )
             if trading_currency != row_base_currency and not market_value_base and not fx_rate_to_base:
-                row_warnings.append("non-base-currency row lacks base value and FX rate")
+                _add_row_warning(
+                    row_warnings,
+                    row_warning_codes,
+                    NON_BASE_CURRENCY_MISSING_FX,
+                    "non-base-currency row lacks base value and FX rate",
+                )
+            if quantity < 0:
+                _add_row_warning(
+                    row_warnings,
+                    row_warning_codes,
+                    NEGATIVE_QUANTITY,
+                    "negative quantity / short position requires manual review; row excluded from candidate holdings",
+                )
+            if instrument_type not in SUPPORTED_CANDIDATE_INSTRUMENT_TYPES:
+                code = (
+                    UNSUPPORTED_INSTRUMENT_TYPE
+                    if UNSUPPORTED_INSTRUMENT_TYPE in row_warning_codes
+                    else UNKNOWN_INSTRUMENT_TYPE if instrument_type == "other" else UNSUPPORTED_INSTRUMENT_TYPE
+                )
+                _add_row_warning(
+                    row_warnings,
+                    row_warning_codes,
+                    code,
+                    f"instrument_type {instrument_type} is not supported for candidate holdings; row excluded from candidate holdings",
+                )
 
-            ready_row = {
-                "portfolio_id": portfolio_id,
-                "as_of_date": as_of_date,
-                "ticker": ticker,
-                "name": name,
-                "quantity": _number_to_text(quantity),
-                "market_value_local": _number_to_text(local_value) if local_value is not None else "",
-                "trading_currency": trading_currency,
-                "base_currency": row_base_currency,
-                "fx_rate_to_base": _number_to_text(fx_rate) if fx_rate is not None else "",
-                "market_value_base": _number_to_text(base_value) if base_value is not None else "",
-                "instrument_type": instrument_type,
-                "issuer_name": issuer_name,
-                "issuer_canonical_id": "",
-                "underlying_issuer_name": "",
-                "underlying_ticker": underlying_ticker,
-                "listing_country": listing_country,
-                "country_of_risk": "",
-                "region": "",
-                "sector": "",
-                "industry": "",
-                "themes": "",
-                "leverage_factor": "",
-                "notes": notes,
-            }
-            row_warnings.append("human review required before using this row in exposure reports")
+            if any(code in BLOCKING_ISSUE_CODES for code in row_warning_codes):
+                parse_status = "excluded"
+            else:
+                ready_row = {
+                    "portfolio_id": portfolio_id,
+                    "as_of_date": as_of_date,
+                    "ticker": ticker,
+                    "name": name,
+                    "quantity": _number_to_text(quantity),
+                    "market_value_local": _number_to_text(local_value) if local_value is not None else "",
+                    "trading_currency": trading_currency,
+                    "base_currency": row_base_currency,
+                    "fx_rate_to_base": _number_to_text(fx_rate) if fx_rate is not None else "",
+                    "market_value_base": _number_to_text(base_value) if base_value is not None else "",
+                    "instrument_type": instrument_type,
+                    "issuer_name": issuer_name,
+                    "issuer_canonical_id": "",
+                    "underlying_issuer_name": "",
+                    "underlying_ticker": underlying_ticker,
+                    "listing_country": listing_country,
+                    "country_of_risk": "",
+                    "region": "",
+                    "sector": "",
+                    "industry": "",
+                    "themes": "",
+                    "leverage_factor": "",
+                    "notes": notes,
+                }
+            _add_row_warning(
+                row_warnings,
+                row_warning_codes,
+                MANUAL_REVIEW_REQUIRED,
+                "human review required before using this row in exposure reports",
+            )
 
     source_prefix = f"{source_row.path.name}: row {source_row.row_number}"
     for warning in row_warnings:
@@ -412,6 +539,7 @@ def _map_source_row(
         "parse_status": parse_status,
         "review_required": "true",
         "warnings": "; ".join(row_warnings),
+        "warning_codes": "; ".join(dict.fromkeys(row_warning_codes)),
         **mapped,
         "ibkr_asset_category": asset_category,
         "ibkr_security_type": security_type,
@@ -421,6 +549,47 @@ def _map_source_row(
         "ibkr_account": account,
     }
     return review_row, ready_row
+
+
+def _add_row_warning(row_warnings: list[str], row_warning_codes: list[str], code: str, message: str) -> None:
+    row_warnings.append(message)
+    row_warning_codes.append(code)
+
+
+def _warning_codes(row: dict[str, str]) -> list[str]:
+    return [code.strip() for code in row.get("warning_codes", "").split(";") if code.strip()]
+
+
+def _warnings_by_code(review_rows: list[dict[str, str]]) -> dict[str, int]:
+    counter: Counter[str] = Counter()
+    for row in review_rows:
+        counter.update(dict.fromkeys(_warning_codes(row)).keys())
+    return dict(sorted(counter.items()))
+
+
+def _excluded_row_count(review_rows: list[dict[str, str]]) -> int:
+    return sum(1 for row in review_rows if row["parse_status"] == "excluded")
+
+
+def _excluded_by_reason(review_rows: list[dict[str, str]]) -> dict[str, int]:
+    counter: Counter[str] = Counter()
+    for row in review_rows:
+        if row["parse_status"] != "excluded":
+            continue
+        codes = [code for code in _warning_codes(row) if code in BLOCKING_ISSUE_CODES]
+        if codes:
+            counter.update(dict.fromkeys(codes).keys())
+        else:
+            counter["EXCLUDED_REVIEW_REQUIRED"] += 1
+    return dict(sorted(counter.items()))
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _first_value(row: dict[str, str], aliases: list[str], warnings: list[str]) -> str:
@@ -436,8 +605,20 @@ def _first_value(row: dict[str, str], aliases: list[str], warnings: list[str]) -
     return found[0][1] if found else ""
 
 
-def _instrument_type(asset_category: str, security_type: str, warnings: list[str]) -> str:
+def _instrument_type(asset_category: str, security_type: str, warnings: list[str], warning_codes: list[str]) -> str:
     text = f"{asset_category} {security_type}".strip().lower()
+    if any(token in text for token in ["option", "opt "]):
+        _add_row_warning(warnings, warning_codes, UNSUPPORTED_INSTRUMENT_TYPE, "options are not supported for candidate holdings")
+        return "other"
+    if any(token in text for token in ["future", "fut "]):
+        _add_row_warning(warnings, warning_codes, UNSUPPORTED_INSTRUMENT_TYPE, "futures are not supported for candidate holdings")
+        return "other"
+    if any(token in text for token in ["warrant"]):
+        _add_row_warning(warnings, warning_codes, UNSUPPORTED_INSTRUMENT_TYPE, "warrants are not supported for candidate holdings")
+        return "other"
+    if any(token in text for token in ["cfd", "contract for difference"]):
+        _add_row_warning(warnings, warning_codes, UNSUPPORTED_INSTRUMENT_TYPE, "CFDs are not supported for candidate holdings")
+        return "other"
     if any(token in text for token in ["stock", "stk", "equity", "common"]):
         return "stock"
     if "leveraged" in text and "etf" in text:
@@ -451,9 +632,19 @@ def _instrument_type(asset_category: str, security_type: str, warnings: list[str
     if any(token in text for token in CASH_ASSET_MARKERS):
         return "cash"
     if not text:
-        warnings.append("missing asset category/security type; using other instrument_type")
+        _add_row_warning(
+            warnings,
+            warning_codes,
+            UNKNOWN_INSTRUMENT_TYPE,
+            "missing asset category/security type; using other instrument_type",
+        )
     else:
-        warnings.append(f"unmapped asset category/security type '{text}'; using other instrument_type")
+        _add_row_warning(
+            warnings,
+            warning_codes,
+            UNKNOWN_INSTRUMENT_TYPE,
+            f"unmapped asset category/security type '{text}'; using other instrument_type",
+        )
     return "other"
 
 
@@ -548,20 +739,28 @@ def _write_warnings_markdown(result: ImportResult) -> None:
         "- No broker API was used.",
         "- No credentials, API keys, or tokens are required.",
         "- Imported holdings are not verified until reviewed by a human.",
-        "- Do not use `portfolio_runner_ready_holdings.csv` for exposure reporting until this review is complete.",
+        "- Do not use `staged_unverified_holdings.csv` for exposure reporting until this review is complete.",
+        "- `portfolio_runner_ready_holdings.csv` is deprecated compatibility output and is not verified.",
         "",
         "## Run Metadata",
         "",
         f"- Portfolio ID: `{result.portfolio_id}`",
         f"- As-of date: `{result.as_of_date}`",
         f"- Base currency: `{result.base_currency}`",
-        f"- Ready holdings: `{len(result.ready_rows)}`",
+        f"- Candidate holdings: `{len(result.ready_rows)}`",
         f"- Review rows: `{len(result.review_rows)}`",
         f"- Warning count: `{len(result.warnings)}`",
+        f"- Manifest: `{result.output_files['review_manifest']}`",
         "",
-        "## Warnings",
+        "## Warning Codes",
         "",
     ]
+    warnings_by_code = _warnings_by_code(result.review_rows)
+    if warnings_by_code:
+        lines.extend(f"- `{code}`: {count}" for code, count in warnings_by_code.items())
+    else:
+        lines.append("- None")
+    lines.extend(["", "## Warnings", ""])
     if result.warnings:
         lines.extend(f"- {warning}" for warning in result.warnings)
     else:
@@ -575,6 +774,7 @@ def _write_warnings_markdown(result: ImportResult) -> None:
             "- Add or review issuer canonical IDs, country-of-risk, region, sector, industry, and themes.",
             "- Review cash and FX rows manually; multi-currency cash is not converted by this adapter.",
             "- Treat all rows as unverified until `parsed_holdings_review.csv` has been reviewed.",
+            "- Treat the staged candidate CSV and deprecated compatibility CSV as unverified review artifacts.",
             "",
         ]
     )
@@ -591,7 +791,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         required=True,
         help="Local IBKR CSV/Flex-style CSV file. Repeat for multiple files.",
     )
-    parser.add_argument("--out-dir", required=True, help="Output directory for review CSV, runner CSV, warnings, and JSON summary.")
+    parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for review CSV, staged candidate CSV, warnings, summary, and manifest.",
+    )
     parser.add_argument(
         "--portfolio-id",
         default="ibkr_import_review",
@@ -618,9 +822,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 2
 
     print(f"wrote parsed review CSV: {result.output_files['parsed_holdings_review']}")
-    print(f"wrote runner-ready holdings CSV: {result.output_files['portfolio_runner_ready_holdings']}")
+    print(f"wrote staged unverified holdings CSV: {result.output_files['staged_unverified_holdings']}")
+    print(f"wrote deprecated compatibility holdings CSV: {result.output_files['portfolio_runner_ready_holdings']}")
     print(f"wrote warnings: {result.output_files['warnings']}")
     print(f"wrote JSON summary: {result.output_files['summary']}")
+    print(f"wrote review manifest: {result.output_files['review_manifest']}")
     if result.warnings:
         print(f"warnings: {len(result.warnings)}")
     return 0

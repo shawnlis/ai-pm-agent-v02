@@ -20,14 +20,20 @@ Use repeated `--statement` arguments for multiple files. `--input` is accepted a
 
 ## Outputs
 
-The adapter writes four local review artifacts:
+The adapter writes local review artifacts:
 
 - `parsed_holdings_review.csv`
+- `staged_unverified_holdings.csv`
 - `portfolio_runner_ready_holdings.csv`
 - `ibkr_import_warnings.md`
 - `ibkr_import_summary.json`
+- `ibkr_review_manifest.json`
 
-`portfolio_runner_ready_holdings.csv` uses the Phase 3C holdings columns, but it is not a verification certificate. Rows remain review-required until a human checks the review CSV and warnings file against the original statement.
+`staged_unverified_holdings.csv` is the primary candidate holdings file. It uses the Phase 3C holdings columns, but every row remains unverified and review-required until a human checks it against `parsed_holdings_review.csv`, `ibkr_import_warnings.md`, and the original statement.
+
+`portfolio_runner_ready_holdings.csv` is emitted for one-version backward compatibility only. It contains the same review-required candidate rows as `staged_unverified_holdings.csv`, is deprecated, and must not be treated as verified or final portfolio data.
+
+`ibkr_review_manifest.json` is the machine-readable review gate. It includes the source file hash, offline/review flags, row counts, warning-code counts, exclusion reasons, output file paths, and notes stating that human review is required before using candidate holdings in exposure reports.
 
 ## Supported Local Inputs
 
@@ -80,14 +86,28 @@ The adapter warns on:
 - non-base-currency rows without base value or FX rate
 - unmapped asset/security type
 - cash-like rows, which are excluded and require manual review
+- negative quantity / short-position rows
+- unsupported options, futures, warrants, CFDs, bonds/notes, and fund rows unless explicitly supported later
 
-Rows that cannot become valid Phase 3C holdings are still included in `parsed_holdings_review.csv` with `parse_status=excluded`, but they are not written to `portfolio_runner_ready_holdings.csv`.
+Rows that cannot become valid Phase 3C holdings are still included in `parsed_holdings_review.csv` with `parse_status=excluded`, but they are not written to `staged_unverified_holdings.csv` or the deprecated compatibility CSV.
+
+The review CSV contains a `warning_codes` column for machine-readable review gates. Common codes include:
+
+- `MISSING_CURRENCY`
+- `MISSING_MARKET_VALUE`
+- `CASH_LIKE_ROW_EXCLUDED`
+- `UNKNOWN_INSTRUMENT_TYPE`
+- `UNSUPPORTED_INSTRUMENT_TYPE`
+- `NEGATIVE_QUANTITY`
+- `NON_BASE_CURRENCY_MISSING_FX`
+- `MANUAL_REVIEW_REQUIRED`
+- `IBKR_IMPORT_REVIEW_REQUIRED`
 
 ## Human Review Boundary
 
 Imported holdings are unverified until reviewed.
 
-Before using `portfolio_runner_ready_holdings.csv` in the Phase 3C exposure runner:
+Before using `staged_unverified_holdings.csv` in the Phase 3C exposure runner:
 
 - confirm tickers, quantities, currencies, and market values against the original statement
 - review any excluded rows
@@ -96,6 +116,8 @@ Before using `portfolio_runner_ready_holdings.csv` in the Phase 3C exposure runn
 - add or review sector, industry, region, country-of-risk, and themes
 - confirm the as-of date and base currency
 - treat any base-currency fallback for missing trading currency as unverified until manually corrected or confirmed
+- inspect `ibkr_review_manifest.json` and do not proceed if warning codes or excluded rows have not been reviewed
+- treat `portfolio_runner_ready_holdings.csv` as deprecated compatibility output, not a safer or more verified file
 
 The adapter output is a local import-review artifact only. It is not investment advice, trading advice, suitability advice, tax advice, or a PM recommendation.
 
