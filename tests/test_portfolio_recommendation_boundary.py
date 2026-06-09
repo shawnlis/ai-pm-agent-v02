@@ -202,6 +202,8 @@ def test_run_company_research_never_passes_portfolio_to_deep_pm_prompt(monkeypat
         full_package = (output_dir / "full_research_package.md").read_text(encoding="utf-8")
 
         assert agent.PORTFOLIO_RECOMMENDATION_BOUNDARY_NOTICE in portfolio_artifact
+        assert agent.PORTFOLIO_RECOMMENDATION_BOUNDARY_NOTICE in full_package
+        assert "## Portfolio Recommendation Boundary" in full_package
         for artifact in [prompt_artifact, portfolio_artifact, full_package]:
             assert "TQQQ" not in artifact
             assert "SOXL" not in artifact
