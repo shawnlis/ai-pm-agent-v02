@@ -17,7 +17,15 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from ai_pm_agent.risk_cockpit_pipeline.models import RiskCockpitPipelineError, assert_safe_input_path
+from ai_pm_agent.risk_cockpit_pipeline.fixture_market_data import (
+    FixtureMarketDataProvider,
+    load_fixture_market_data,
+)
+from ai_pm_agent.risk_cockpit_pipeline.models import (
+    RiskCockpitPipelineError,
+    RiskCockpitPipelineFailure,
+    assert_safe_input_path,
+)
 from ai_pm_agent.risk_cockpit_pipeline.report_writer import default_output_dir
 from ai_pm_agent.risk_cockpit_pipeline.runner import run_pipeline
 from ai_pm_agent.risk_cockpit_pipeline.schema import (
@@ -59,6 +67,8 @@ EXPECTED_INDEX_KEYS = {
     "short_put_status",
     "warning_codes",
 }
+
+EXPECTED_FAILURE_INDEX_KEYS = EXPECTED_INDEX_KEYS | {"error_message"}
 
 REQUIRED_OUTPUTS = {
     REPORT_FILENAME,
@@ -114,6 +124,101 @@ def test_pipeline_can_read_existing_report_artifact_dirs() -> None:
         assert second.portfolio_input_path == ""
         assert second.short_put_input_path == ""
         assert (second_out / INDEX_FILENAME).exists()
+
+
+def test_market_fixture_row_must_be_explicitly_fixture_only() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _write_market_fixture(Path(tmp), fixture_only="false")
+
+        with pytest.raises(RiskCockpitPipelineError) as exc_info:
+            load_fixture_market_data(path)
+
+    message = str(exc_info.value)
+    assert "MARKET_DATA_NOT_FIXTURE" in message
+    provider = FixtureMarketDataProvider()
+    assert provider.provider_level == "Level 0"
+    assert provider.network_access is False
+    assert provider.live_market_data is False
+    assert provider.fixture_only is True
+
+
+def test_market_fixture_failure_writes_fail_closed_index() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        bad_market = _write_market_fixture(root, fixture_only="false")
+        out_dir = root / "reports" / "risk_cockpit_pipeline" / "v052" / "market_failed"
+
+        with pytest.raises(RiskCockpitPipelineFailure) as exc_info:
+            run_pipeline(
+                portfolio_input=PORTFOLIO_FIXTURE,
+                short_put_input=SHORT_PUT_FIXTURE,
+                market_data_fixture=bad_market,
+                out_dir=out_dir,
+                run_foundation_reports=True,
+                as_of_date="2026-06-13",
+            )
+        index = json.loads((out_dir / INDEX_FILENAME).read_text(encoding="utf-8"))
+
+        assert exc_info.value.index_path == str(out_dir / INDEX_FILENAME)
+        assert set(index) == EXPECTED_FAILURE_INDEX_KEYS
+        assert "PIPELINE_FAILED_CLOSED" in index["warning_codes"]
+        assert "MARKET_DATA_LOAD_FAILED" in index["warning_codes"]
+        assert "MARKET_DATA_NOT_FIXTURE" in index["error_message"]
+        assert index["market_data_status"] == "failed"
+        assert index["review_required"] is True
+        assert index["boundary"]["risk_report_only"] is True
+        assert index["boundary"]["broker_connection"] is False
+        assert index["boundary"]["ibkr_content_inspected"] is False
+        assert index["boundary"]["live_market_data"] is False
+        assert index["boundary"]["market_data_provider_level"] == "Level 0"
+        assert index["boundary"]["fixture_market_data_only"] is True
+        assert index["boundary"]["recommendation_output"] is False
+
+
+def test_malformed_portfolio_json_writes_artifact_failure_index() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        first_out = _run_fixture_pipeline(root)
+        portfolio_summary = first_out / "portfolio_risk_cockpit" / "portfolio_risk_summary.json"
+        portfolio_summary.write_text("{not json", encoding="utf-8")
+        out_dir = root / "reports" / "risk_cockpit_pipeline" / "v052" / "artifact_failed"
+
+        with pytest.raises(RiskCockpitPipelineFailure):
+            run_pipeline(
+                portfolio_report_dir=first_out / "portfolio_risk_cockpit",
+                short_put_report_dir=first_out / "short_put_risk_monitor",
+                market_data_fixture=MARKET_FIXTURE,
+                out_dir=out_dir,
+                as_of_date="2026-06-13",
+            )
+        index = json.loads((out_dir / INDEX_FILENAME).read_text(encoding="utf-8"))
+
+        assert "PIPELINE_FAILED_CLOSED" in index["warning_codes"]
+        assert "ARTIFACT_READ_FAILED" in index["warning_codes"]
+        assert index["portfolio_status"] == "failed"
+        assert "error_message" in index
+
+
+def test_foundation_report_failure_writes_failure_index() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        out_dir = root / "reports" / "risk_cockpit_pipeline" / "v052" / "foundation_failed"
+
+        with pytest.raises(RiskCockpitPipelineFailure):
+            run_pipeline(
+                portfolio_input=root / "safe_missing_fixture.csv",
+                short_put_input=SHORT_PUT_FIXTURE,
+                market_data_fixture=MARKET_FIXTURE,
+                out_dir=out_dir,
+                run_foundation_reports=True,
+                as_of_date="2026-06-13",
+            )
+        index = json.loads((out_dir / INDEX_FILENAME).read_text(encoding="utf-8"))
+
+        assert "PIPELINE_FAILED_CLOSED" in index["warning_codes"]
+        assert "FOUNDATION_REPORT_FAILED" in index["warning_codes"]
+        assert index["portfolio_status"] == "failed"
+        assert index["boundary"]["trading"] is False
 
 
 def test_pipeline_index_json_schema_is_stable() -> None:
@@ -378,6 +483,40 @@ def test_cli_writes_outputs_and_fails_closed() -> None:
         assert "DISALLOWED_REAL_DATA_PATH" in failed.stderr
 
 
+def test_cli_post_start_failure_prints_failure_index_path() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        bad_market = _write_market_fixture(root, fixture_only="false")
+        out_dir = root / "reports" / "risk_cockpit_pipeline" / "v052" / "cli_failed"
+
+        failed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--portfolio-input",
+                str(PORTFOLIO_FIXTURE),
+                "--short-put-input",
+                str(SHORT_PUT_FIXTURE),
+                "--market-data-fixture",
+                str(bad_market),
+                "--out-dir",
+                str(out_dir),
+                "--run-foundation-reports",
+                "--as-of-date",
+                "2026-06-13",
+                "--offline",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert failed.returncode == 2
+        assert "Risk Cockpit Pipeline failed closed" in failed.stderr
+        assert str(out_dir / INDEX_FILENAME) in failed.stderr
+        assert (out_dir / INDEX_FILENAME).exists()
+
+
 def _run_fixture_pipeline(root: Path) -> Path:
     out_dir = root / "reports" / "risk_cockpit_pipeline" / "v052" / "20260613"
     run_pipeline(
@@ -399,3 +538,22 @@ def _fieldnames(path: Path) -> list[str]:
 def _rows(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _write_market_fixture(tmp_path: Path, *, fixture_only: str) -> Path:
+    path = tmp_path / "safe_market_data_fixture.csv"
+    row = {
+        "ticker": "NVDA",
+        "price": "126",
+        "currency": "USD",
+        "as_of_date": "2026-06-13",
+        "source": "local_fixture",
+        "source_confidence": "medium",
+        "fixture_only": fixture_only,
+        "notes": "test fixture",
+    }
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    return path

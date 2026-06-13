@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import csv
 import json
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
 from ai_pm_agent.portfolio_risk_cockpit import schema as portfolio_schema
 from ai_pm_agent.risk_cockpit_pipeline.models import (
     ArtifactReadResult,
+    ARTIFACT_READ_FAILED,
     MISSING_PORTFOLIO_ARTIFACT,
     MISSING_SHORT_PUT_ARTIFACT,
     RISK_ARTIFACT_NEEDS_REVIEW,
+    RiskCockpitPipelineError,
     assert_safe_input_path,
     requires_review,
     unique_codes,
@@ -114,7 +117,12 @@ def _read_artifacts(
             continue
 
         if kind == "json":
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, JSONDecodeError) as exc:
+                raise RiskCockpitPipelineError(f"{ARTIFACT_READ_FAILED}: failed to parse JSON artifact {path}") from exc
+            if not isinstance(payload, dict):
+                raise RiskCockpitPipelineError(f"{ARTIFACT_READ_FAILED}: JSON artifact {path} must contain an object")
             codes = [str(code) for code in payload.get("warning_codes", []) if code]
             if codes:
                 warning_codes.append(RISK_ARTIFACT_NEEDS_REVIEW)
@@ -152,8 +160,21 @@ def _read_artifacts(
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as handle:
-        return [dict(row) for row in csv.DictReader(handle)]
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            if not reader.fieldnames:
+                raise RiskCockpitPipelineError(f"{ARTIFACT_READ_FAILED}: CSV artifact {path} missing header row")
+            rows: list[dict[str, str]] = []
+            for row in reader:
+                if None in row:
+                    raise RiskCockpitPipelineError(
+                        f"{ARTIFACT_READ_FAILED}: CSV artifact {path} contains unreadable columns"
+                    )
+                rows.append(dict(row))
+            return rows
+    except csv.Error as exc:
+        raise RiskCockpitPipelineError(f"{ARTIFACT_READ_FAILED}: failed to parse CSV artifact {path}") from exc
 
 
 def _warning_codes_from_rows(rows: list[dict[str, Any]]) -> list[str]:

@@ -53,9 +53,10 @@ def build_pipeline_index(
     enrichment_status: str,
     files_created: list[str],
     warning_codes: list[str],
+    error_message: str | None = None,
 ) -> dict[str, object]:
     review_required = requires_review(warning_codes)
-    return {
+    index = {
         "run_id": run_id,
         "generated_at": generated_at,
         "schema_version": SCHEMA_VERSION,
@@ -74,6 +75,9 @@ def build_pipeline_index(
         "review_required": review_required,
         "boundary": dict(SAFETY_BOUNDARY),
     }
+    if error_message is not None:
+        index["error_message"] = error_message
+    return index
 
 
 def codes_from_rows(rows: Iterable[dict[str, object]]) -> list[str]:
@@ -98,8 +102,13 @@ def _warning_note(code: str) -> str:
         "STALE_MARKET_DATA": "fixture market data is older than the configured age",
         "PRICE_MISMATCH_NEEDS_REVIEW": "source price differs from fixture market data",
         "MARKET_DATA_FIXTURE_ONLY": "market data came from a local fixture",
+        "MARKET_DATA_NOT_FIXTURE": "market data row was not explicitly marked as fixture-only",
         "RISK_ARTIFACT_NEEDS_REVIEW": "source risk artifact contains review warnings",
         "PIPELINE_REVIEW_REQUIRED": "pipeline output requires manual review",
+        "PIPELINE_FAILED_CLOSED": "pipeline failed closed and wrote an audit index",
+        "MARKET_DATA_LOAD_FAILED": "market data fixture loading failed",
+        "FOUNDATION_REPORT_FAILED": "foundation report generation failed",
+        "ARTIFACT_READ_FAILED": "source artifact parsing failed",
         "DISALLOWED_REAL_DATA_PATH": "real-data-looking path was rejected",
         "NO_LIVE_MARKET_DATA": "no live market data provider was used",
     }

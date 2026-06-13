@@ -77,6 +77,10 @@ Fixture market data is review context only. It does not overwrite Portfolio Risk
 
 The pipeline emits review warnings for missing market data, stale market data, and material price mismatches. Missing or stale market data does not create fabricated values.
 
+Every market data fixture row must explicitly declare `fixture_only=true`. Accepted true values are `true`, `1`, `yes`, and `y`. Empty values, false values, or unrecognized values fail closed with `MARKET_DATA_NOT_FIXTURE`.
+
+Any non-fixture market data row fails closed. The provider remains Level 0, network-free, non-live, and fixture-only; the pipeline does not silently coerce non-fixture data into fixture data.
+
 ## Warning Definitions
 
 - `MISSING_PORTFOLIO_ARTIFACT`: a required portfolio artifact is absent.
@@ -85,10 +89,23 @@ The pipeline emits review warnings for missing market data, stale market data, a
 - `STALE_MARKET_DATA`: fixture market data is older than the configured maximum age.
 - `PRICE_MISMATCH_NEEDS_REVIEW`: short put source price differs from fixture market data beyond the configured threshold.
 - `MARKET_DATA_FIXTURE_ONLY`: market data came from a local fixture.
+- `MARKET_DATA_NOT_FIXTURE`: market data row was not explicitly marked fixture-only.
 - `RISK_ARTIFACT_NEEDS_REVIEW`: a source risk artifact contains review-risk rows or warning codes.
 - `PIPELINE_REVIEW_REQUIRED`: at least one review-risk warning is present.
+- `PIPELINE_FAILED_CLOSED`: pipeline failed closed and wrote an audit index.
+- `MARKET_DATA_LOAD_FAILED`: market data fixture loading failed.
+- `FOUNDATION_REPORT_FAILED`: foundation report generation failed.
+- `ARTIFACT_READ_FAILED`: source artifact parsing failed.
 - `DISALLOWED_REAL_DATA_PATH`: a real-data-looking path was rejected before file read.
 - `NO_LIVE_MARKET_DATA`: no live market data provider was used.
+
+## Fail-Closed Audit Behavior
+
+If execution fails after the pipeline has started, the pipeline writes `risk_cockpit_pipeline_index.json` with failed statuses, warning codes, `error_message`, and the normal safe boundary fields.
+
+Failure indexes are audit artifacts, not recommendations. They are written so the operator can see what had already run, which step failed, and why the output must not be treated as complete.
+
+Malformed artifacts, non-fixture market data, missing data, stale market data, and mismatched market data must not be treated as usable without manual review.
 
 ## Safety Boundaries
 

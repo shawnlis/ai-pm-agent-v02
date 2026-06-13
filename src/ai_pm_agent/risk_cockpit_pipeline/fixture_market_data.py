@@ -8,6 +8,7 @@ from typing import Any
 
 from ai_pm_agent.risk_cockpit_pipeline.models import (
     MARKET_DATA_FIXTURE_ONLY,
+    MARKET_DATA_NOT_FIXTURE,
     NO_LIVE_MARKET_DATA,
     MarketDataPoint,
     MarketDataProviderSnapshot,
@@ -94,7 +95,7 @@ def _point_from_row(row: dict[str, str], row_number: int) -> MarketDataPoint:
         as_of_date=as_of_date,
         source=_clean_value(row.get("source")) or "fixture",
         source_confidence=_clean_value(row.get("source_confidence")) or "UNKNOWN",
-        fixture_only=_parse_bool(row.get("fixture_only")),
+        fixture_only=_parse_fixture_only(row.get("fixture_only"), ticker, row_number),
         notes=_clean_value(row.get("notes")),
     )
 
@@ -112,8 +113,13 @@ def _parse_positive_float(value: Any, field: str, ticker: str, row_number: int) 
     return parsed
 
 
-def _parse_bool(value: Any) -> bool:
-    return _clean_value(value).lower() in {"1", "true", "yes", "y"}
+def _parse_fixture_only(value: Any, ticker: str, row_number: int) -> bool:
+    text = _clean_value(value).lower()
+    if text in {"1", "true", "yes", "y"}:
+        return True
+    raise RiskCockpitPipelineError(
+        f"{MARKET_DATA_NOT_FIXTURE}: {ticker} market data row {row_number} must explicitly declare fixture_only=true"
+    )
 
 
 def _clean_row(row: dict[str, Any]) -> dict[str, str]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import UTC, date, datetime
 import sys
 from pathlib import Path
@@ -26,15 +27,21 @@ from ai_pm_agent.risk_cockpit_pipeline.handoff_index import (
     with_pipeline_review_code,
 )
 from ai_pm_agent.risk_cockpit_pipeline.models import (
+    ARTIFACT_READ_FAILED,
+    FOUNDATION_REPORT_FAILED,
     MARKET_DATA_FIXTURE_ONLY,
+    MARKET_DATA_LOAD_FAILED,
     NO_LIVE_MARKET_DATA,
+    PIPELINE_FAILED_CLOSED,
     RiskCockpitPipelineError,
+    RiskCockpitPipelineFailure,
     RiskCockpitPipelineResult,
     assert_safe_input_path,
     requires_review,
     unique_codes,
 )
 from ai_pm_agent.risk_cockpit_pipeline.report_writer import default_output_dir, write_outputs
+from ai_pm_agent.risk_cockpit_pipeline.schema import INDEX_FILENAME
 from ai_pm_agent.short_put_risk_monitor.runner import run_monitor
 
 
@@ -53,10 +60,17 @@ def run_pipeline(
 ) -> RiskCockpitPipelineResult:
     report_date = as_of_date or date.today().isoformat()
     target = Path(out_dir) if out_dir is not None else default_output_dir()
+    run_id = f"risk-cockpit-v052-{uuid4().hex[:12]}"
+    generated_at = datetime.now(UTC).isoformat()
     market_fixture_path = assert_safe_input_path(market_data_fixture)
 
     portfolio_input_text = ""
     short_put_input_text = ""
+    files_created: list[str] = []
+    portfolio_status = "not_started"
+    short_put_status = "not_started"
+    market_data_status = "not_started"
+    enrichment_status = "not_started"
     if run_foundation_reports:
         if portfolio_input is None or short_put_input is None:
             raise RiskCockpitPipelineError("--run-foundation-reports requires --portfolio-input and --short-put-input")
@@ -66,8 +80,50 @@ def run_pipeline(
         short_put_input_text = str(short_put_input_path)
         portfolio_dir = target / "portfolio_risk_cockpit"
         short_put_dir = target / "short_put_risk_monitor"
-        run_cockpit(input_path=portfolio_input_path, out_dir=portfolio_dir, as_of_date=report_date)
-        run_monitor(input_path=short_put_input_path, out_dir=short_put_dir, as_of_date=report_date)
+        try:
+            portfolio_result = run_cockpit(input_path=portfolio_input_path, out_dir=portfolio_dir, as_of_date=report_date)
+        except Exception as exc:
+            _fail_closed(
+                target=target,
+                run_id=run_id,
+                generated_at=generated_at,
+                portfolio_report_dir=str(portfolio_dir),
+                short_put_report_dir=str(short_put_dir),
+                portfolio_input_path=portfolio_input_text,
+                short_put_input_path=short_put_input_text,
+                market_data_fixture_path=str(market_fixture_path),
+                portfolio_status="failed",
+                short_put_status=short_put_status,
+                market_data_status=market_data_status,
+                enrichment_status=enrichment_status,
+                files_created=files_created,
+                warning_codes=[FOUNDATION_REPORT_FAILED],
+                error_message=str(exc),
+            )
+        files_created.extend(portfolio_result.files.values())
+        portfolio_status = "generated"
+        try:
+            short_put_result = run_monitor(input_path=short_put_input_path, out_dir=short_put_dir, as_of_date=report_date)
+        except Exception as exc:
+            _fail_closed(
+                target=target,
+                run_id=run_id,
+                generated_at=generated_at,
+                portfolio_report_dir=str(portfolio_dir),
+                short_put_report_dir=str(short_put_dir),
+                portfolio_input_path=portfolio_input_text,
+                short_put_input_path=short_put_input_text,
+                market_data_fixture_path=str(market_fixture_path),
+                portfolio_status=portfolio_status,
+                short_put_status="failed",
+                market_data_status=market_data_status,
+                enrichment_status=enrichment_status,
+                files_created=files_created,
+                warning_codes=[FOUNDATION_REPORT_FAILED],
+                error_message=str(exc),
+            )
+        files_created.extend(short_put_result.files.values())
+        short_put_status = "generated"
     else:
         if portfolio_report_dir is None or short_put_report_dir is None:
             raise RiskCockpitPipelineError(
@@ -75,19 +131,100 @@ def run_pipeline(
             )
         portfolio_dir = assert_safe_input_path(portfolio_report_dir)
         short_put_dir = assert_safe_input_path(short_put_report_dir)
+        portfolio_status = "pending"
+        short_put_status = "pending"
 
-    portfolio_artifacts = read_portfolio_artifacts(portfolio_dir)
-    short_put_artifacts = read_short_put_artifacts(short_put_dir)
-    market_snapshot = load_fixture_market_data(market_fixture_path)
+    try:
+        portfolio_artifacts = read_portfolio_artifacts(portfolio_dir)
+    except Exception as exc:
+        _fail_closed(
+            target=target,
+            run_id=run_id,
+            generated_at=generated_at,
+            portfolio_report_dir=str(portfolio_dir),
+            short_put_report_dir=str(short_put_dir),
+            portfolio_input_path=portfolio_input_text,
+            short_put_input_path=short_put_input_text,
+            market_data_fixture_path=str(market_fixture_path),
+            portfolio_status="failed",
+            short_put_status=short_put_status,
+            market_data_status=market_data_status,
+            enrichment_status=enrichment_status,
+            files_created=files_created,
+            warning_codes=[ARTIFACT_READ_FAILED],
+            error_message=str(exc),
+        )
+    portfolio_status = _status_from_codes(portfolio_artifacts.warning_codes)
+    try:
+        short_put_artifacts = read_short_put_artifacts(short_put_dir)
+    except Exception as exc:
+        _fail_closed(
+            target=target,
+            run_id=run_id,
+            generated_at=generated_at,
+            portfolio_report_dir=str(portfolio_dir),
+            short_put_report_dir=str(short_put_dir),
+            portfolio_input_path=portfolio_input_text,
+            short_put_input_path=short_put_input_text,
+            market_data_fixture_path=str(market_fixture_path),
+            portfolio_status=portfolio_status,
+            short_put_status="failed",
+            market_data_status=market_data_status,
+            enrichment_status=enrichment_status,
+            files_created=files_created,
+            warning_codes=[ARTIFACT_READ_FAILED],
+            error_message=str(exc),
+        )
+    short_put_status = _status_from_codes(short_put_artifacts.warning_codes)
+    try:
+        market_snapshot = load_fixture_market_data(market_fixture_path)
+    except Exception as exc:
+        _fail_closed(
+            target=target,
+            run_id=run_id,
+            generated_at=generated_at,
+            portfolio_report_dir=str(portfolio_dir),
+            short_put_report_dir=str(short_put_dir),
+            portfolio_input_path=portfolio_input_text,
+            short_put_input_path=short_put_input_text,
+            market_data_fixture_path=str(market_fixture_path),
+            portfolio_status=portfolio_status,
+            short_put_status=short_put_status,
+            market_data_status="failed",
+            enrichment_status=enrichment_status,
+            files_created=files_created,
+            warning_codes=[MARKET_DATA_LOAD_FAILED],
+            error_message=str(exc),
+        )
     market_rows = market_data_snapshot_rows(market_snapshot)
-    enrichment_rows = build_enrichment_rows(
-        portfolio_ticker_rows=portfolio_artifacts.portfolio_ticker_rows,
-        short_put_position_rows=short_put_artifacts.short_put_position_rows,
-        market_points=market_snapshot.points,
-        as_of_date=report_date,
-        max_market_data_age_days=max_market_data_age_days,
-        price_mismatch_threshold_pct=price_mismatch_threshold_pct,
-    )
+    market_data_status = "loaded"
+    try:
+        enrichment_rows = build_enrichment_rows(
+            portfolio_ticker_rows=portfolio_artifacts.portfolio_ticker_rows,
+            short_put_position_rows=short_put_artifacts.short_put_position_rows,
+            market_points=market_snapshot.points,
+            as_of_date=report_date,
+            max_market_data_age_days=max_market_data_age_days,
+            price_mismatch_threshold_pct=price_mismatch_threshold_pct,
+        )
+    except Exception as exc:
+        _fail_closed(
+            target=target,
+            run_id=run_id,
+            generated_at=generated_at,
+            portfolio_report_dir=str(portfolio_dir),
+            short_put_report_dir=str(short_put_dir),
+            portfolio_input_path=portfolio_input_text,
+            short_put_input_path=short_put_input_text,
+            market_data_fixture_path=str(market_fixture_path),
+            portfolio_status=portfolio_status,
+            short_put_status=short_put_status,
+            market_data_status=market_data_status,
+            enrichment_status="failed",
+            files_created=files_created,
+            warning_codes=[],
+            error_message=str(exc),
+        )
 
     source_codes = {
         "portfolio_risk_cockpit": portfolio_artifacts.warning_codes,
@@ -111,8 +248,6 @@ def run_pipeline(
     market_data_status = _status_from_codes(codes_from_rows(market_rows) + [MARKET_DATA_FIXTURE_ONLY, NO_LIVE_MARKET_DATA])
     enrichment_status = _status_from_codes(codes_from_rows(enrichment_rows))
 
-    run_id = f"risk-cockpit-v052-{uuid4().hex[:12]}"
-    generated_at = datetime.now(UTC).isoformat()
     index = build_pipeline_index(
         run_id=run_id,
         generated_at=generated_at,
@@ -183,6 +318,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             max_market_data_age_days=args.max_market_data_age_days,
             price_mismatch_threshold_pct=args.price_mismatch_threshold_pct,
         )
+    except RiskCockpitPipelineFailure as exc:
+        suffix = f" index: {exc.index_path}" if exc.index_path else ""
+        print(f"Risk Cockpit Pipeline failed closed: {exc}{suffix}", file=sys.stderr)
+        return 2
     except (RiskCockpitPipelineError, ValueError) as exc:
         print(f"Risk Cockpit Pipeline failed closed: {exc}", file=sys.stderr)
         return 2
@@ -209,3 +348,48 @@ def _market_data_artifact_row(target: Path, market_rows: list[dict[str, object]]
 
 def _status_from_codes(codes: list[str]) -> str:
     return "review_required" if requires_review(codes) else "ok"
+
+
+def _fail_closed(
+    *,
+    target: Path,
+    run_id: str,
+    generated_at: str,
+    portfolio_report_dir: str,
+    short_put_report_dir: str,
+    portfolio_input_path: str,
+    short_put_input_path: str,
+    market_data_fixture_path: str,
+    portfolio_status: str,
+    short_put_status: str,
+    market_data_status: str,
+    enrichment_status: str,
+    files_created: list[str],
+    warning_codes: list[str],
+    error_message: str,
+) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    index_path = target / INDEX_FILENAME
+    merged_codes = unique_codes([PIPELINE_FAILED_CLOSED, *warning_codes])
+    index = build_pipeline_index(
+        run_id=run_id,
+        generated_at=generated_at,
+        portfolio_report_dir=portfolio_report_dir,
+        short_put_report_dir=short_put_report_dir,
+        portfolio_input_path=portfolio_input_path,
+        short_put_input_path=short_put_input_path,
+        market_data_fixture_path=market_data_fixture_path,
+        output_dir=str(target),
+        portfolio_status=portfolio_status,
+        short_put_status=short_put_status,
+        market_data_status=market_data_status,
+        enrichment_status=enrichment_status,
+        files_created=unique_codes([*files_created, str(index_path)]),
+        warning_codes=merged_codes,
+        error_message=error_message,
+    )
+    index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    raise RiskCockpitPipelineFailure(
+        f"{PIPELINE_FAILED_CLOSED}: {error_message}",
+        index_path=str(index_path),
+    )
