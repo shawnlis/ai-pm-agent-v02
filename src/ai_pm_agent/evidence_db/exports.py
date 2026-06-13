@@ -56,7 +56,13 @@ METRIC_FIELDS = [
 ]
 
 
-def export_all(repo: EvidenceRepository, out_dir: Path | str) -> dict[str, str]:
+def export_all(
+    repo: EvidenceRepository,
+    out_dir: Path | str,
+    *,
+    manifest_context: dict[str, Any] | None = None,
+    report_filename: str | None = None,
+) -> dict[str, str]:
     """Write all fixture MVP export contracts and return output paths."""
 
     target = Path(out_dir)
@@ -66,17 +72,24 @@ def export_all(repo: EvidenceRepository, out_dir: Path | str) -> dict[str, str]:
     metric_path = target / "metric_history.csv"
     manifest_path = target / "source_manifest.json"
     warnings_path = target / "ingestion_warnings.md"
-    report_path = target / "SEC_IR_EVIDENCE_DB_FIXTURE_MVP_REPORT.md"
+    context = _default_manifest_context()
+    context.update(manifest_context or {})
+    report_name = report_filename or (
+        "SEC_IR_EVIDENCE_DB_LIVE_FETCH_REPORT.md"
+        if context.get("live_sec_api") is True
+        else "SEC_IR_EVIDENCE_DB_FIXTURE_MVP_REPORT.md"
+    )
+    report_path = target / report_name
 
     ledger_rows = _ledger_rows(repo)
     metric_rows = _metric_rows(repo)
     warnings = _warning_rows(repo)
-    manifest = _source_manifest(repo, target)
+    manifest = _source_manifest(repo, target, context, warnings)
 
     _write_csv(ledger_path, LEDGER_FIELDS, ledger_rows)
     _write_csv(metric_path, METRIC_FIELDS, metric_rows)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    warnings_path.write_text(_warnings_markdown(warnings), encoding="utf-8")
+    warnings_path.write_text(_warnings_markdown(warnings, manifest), encoding="utf-8")
     report_path.write_text(_fixture_report(repo, ledger_rows, metric_rows, warnings, manifest), encoding="utf-8")
 
     return {
@@ -85,6 +98,7 @@ def export_all(repo: EvidenceRepository, out_dir: Path | str) -> dict[str, str]:
         "source_manifest": str(manifest_path),
         "ingestion_warnings": str(warnings_path),
         "fixture_mvp_report": str(report_path),
+        "report": str(report_path),
     }
 
 
@@ -200,7 +214,12 @@ def _warning_rows(repo: EvidenceRepository) -> list[dict[str, Any]]:
     return [_row_dict(row) for row in rows]
 
 
-def _source_manifest(repo: EvidenceRepository, out_dir: Path) -> dict[str, Any]:
+def _source_manifest(
+    repo: EvidenceRepository,
+    out_dir: Path,
+    context: dict[str, Any],
+    warnings: list[dict[str, Any]],
+) -> dict[str, Any]:
     source_rows = repo.fetch_all(
         """
         SELECT
@@ -222,46 +241,67 @@ def _source_manifest(repo: EvidenceRepository, out_dir: Path) -> dict[str, Any]:
         ORDER BY c.ticker, sd.source_type
         """
     )
-    return {
+    sources = [
+        {
+            "source_name": row["source_name"],
+            "source_type": row["source_type"],
+            "ticker": row["ticker"],
+            "company_name": row["company_name"],
+            "cik": row["cik"],
+            "path": row["source_path"],
+            "url_reference": row["source_url"],
+            "hash_sha256": row["source_hash"],
+            "source_date": row["source_date"],
+            "captured_at": row["captured_at"],
+            "confidence": row["confidence"],
+            "source_level": _json_loads(row["metadata_json"]).get("api_level") or context["api_level"],
+            "fixture_only": bool(row["fixture_only"]),
+            "cache_path": _json_loads(row["metadata_json"]).get("cache_path", ""),
+            "cache_hit": bool(_json_loads(row["metadata_json"]).get("cache_hit", False)),
+            "retrieved_at": _json_loads(row["metadata_json"]).get("retrieved_at", row["captured_at"]),
+            "metadata": _json_loads(row["metadata_json"]),
+        }
+        for row in source_rows
+    ]
+    cache_used = any(source.get("cache_path") for source in sources)
+    cache_hit = bool(sources) and all(bool(source.get("cache_hit")) for source in sources)
+    manifest = {
         "generated_at": utc_now(),
-        "api_level": "Level 0",
-        "fixture_only": True,
-        "network_access": False,
-        "live_sec_api": False,
+        "api_level": context["api_level"],
+        "fixture_only": context["fixture_only"],
+        "network_access": context["network_access"],
+        "live_sec_api": context["live_sec_api"],
         "auth_required": False,
         "broker_access": False,
         "portfolio_access": False,
+        "portfolio_data_used": False,
+        "broker_data_used": False,
+        "client_data_used": False,
         "pm_prompt_wiring": False,
+        "cache_used": cache_used,
+        "cache_hit": cache_hit,
         "output_dir": str(out_dir),
         "counts": repo.summarize_counts(),
-        "sources": [
-            {
-                "source_name": row["source_name"],
-                "source_type": row["source_type"],
-                "ticker": row["ticker"],
-                "company_name": row["company_name"],
-                "cik": row["cik"],
-                "path": row["source_path"],
-                "url_reference": row["source_url"],
-                "hash_sha256": row["source_hash"],
-                "source_date": row["source_date"],
-                "captured_at": row["captured_at"],
-                "confidence": row["confidence"],
-                "source_level": "Level 0",
-                "fixture_only": bool(row["fixture_only"]),
-                "metadata": _json_loads(row["metadata_json"]),
-            }
-            for row in source_rows
-        ],
+        "sources": sources,
+        "warning_codes": sorted({warning["code"] for warning in warnings}),
+        "warnings": warnings,
     }
+    manifest.update({key: value for key, value in context.items() if key not in manifest})
+    return manifest
 
 
-def _warnings_markdown(warnings: list[dict[str, Any]]) -> str:
+def _warnings_markdown(warnings: list[dict[str, Any]], manifest: dict[str, Any]) -> str:
+    if manifest["live_sec_api"]:
+        source_mode = "Level 1 public SEC EDGAR live fetch with local cache."
+        live_api = "yes"
+    else:
+        source_mode = "fixture-only local files."
+        live_api = "no"
     lines = [
         "# SEC / IR Evidence DB Ingestion Warnings",
         "",
-        "- Source mode: fixture-only local files.",
-        "- Live SEC API calls: no.",
+        f"- Source mode: {source_mode}",
+        f"- Live SEC API calls: {live_api}.",
         "- PM recommendation wiring: no.",
         "",
     ]
@@ -273,6 +313,8 @@ def _warnings_markdown(warnings: list[dict[str, Any]]) -> str:
         lines.append(f"- `{warning['code']}`: {warning['message']}")
         if warning.get("source_path"):
             lines.append(f"  - Source: `{warning['source_path']}`")
+        if warning.get("context_json") and warning["context_json"] != "{}":
+            lines.append(f"  - Context: `{warning['context_json']}`")
     lines.append("")
     return "\n".join(lines)
 
@@ -286,12 +328,16 @@ def _fixture_report(
 ) -> str:
     counts = repo.summarize_counts()
     lines = [
-        "# SEC / IR Evidence Database Fixture MVP Report",
+        "# SEC / IR Evidence Database Live Fetch Report" if manifest["live_sec_api"] else "# SEC / IR Evidence Database Fixture MVP Report",
         "",
         "## Boundary",
         "",
-        "- This run used fixture-only local SEC-shaped JSON inputs.",
-        "- No live SEC API, web search, market data, LLM, broker, IBKR, trading, portfolio, or client-data workflow was run.",
+        "- This run used Level 1 public SEC EDGAR JSON APIs with explicit user approval."
+        if manifest["live_sec_api"]
+        else "- This run used fixture-only local SEC-shaped JSON inputs.",
+        "- No web search, market data, LLM, broker, IBKR, trading, portfolio, or client-data workflow was run."
+        if manifest["live_sec_api"]
+        else "- No live SEC API, web search, market data, LLM, broker, IBKR, trading, portfolio, or client-data workflow was run.",
         "- The evidence DB is a source ledger and gap-monitor input, not a conclusion engine.",
         "- Outputs are not wired into PM prompts or buy/sell recommendation logic.",
         "",
@@ -318,6 +364,9 @@ def _fixture_report(
             f"- Warning rows: {len(warnings)}",
             f"- Manifest fixture_only: `{manifest['fixture_only']}`",
             f"- Manifest API level: `{manifest['api_level']}`",
+            f"- Manifest live_sec_api: `{manifest['live_sec_api']}`",
+            f"- Manifest network_access: `{manifest['network_access']}`",
+            f"- Manifest cache_used: `{manifest.get('cache_used', False)}`",
             "",
         ]
     )
@@ -334,3 +383,12 @@ def _json_loads(value: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _default_manifest_context() -> dict[str, Any]:
+    return {
+        "api_level": "Level 0",
+        "fixture_only": True,
+        "network_access": False,
+        "live_sec_api": False,
+    }

@@ -16,8 +16,8 @@ if str(SRC) not in sys.path:
 from ai_pm_agent.evidence_db.exports import export_all
 from ai_pm_agent.evidence_db.models import IngestionRun, stable_id, utc_now
 from ai_pm_agent.evidence_db.repository import EvidenceRepository
+from ai_pm_agent.evidence_db import http_client
 from ai_pm_agent.evidence_db.sec_edgar import (
-    LIVE_HTTP_ENABLED,
     build_evidence_claims,
     dry_run_fixtures,
     import_fixtures,
@@ -165,15 +165,25 @@ def test_fixture_only_flag_appears_in_manifest() -> None:
         assert all(source["fixture_only"] is True for source in manifest["sources"])
 
 
-def test_no_network_call_path_exists_in_fixture_mode() -> None:
-    source = (SRC / "ai_pm_agent" / "evidence_db" / "sec_edgar.py").read_text(encoding="utf-8")
+def test_no_network_call_occurs_in_fixture_mode(monkeypatch) -> None:
+    calls: list[str] = []
 
-    assert LIVE_HTTP_ENABLED is False
-    assert "import requests" not in source
-    assert "from requests" not in source
-    assert "urlopen(" not in source
-    assert "httpx" not in source
-    assert "socket." not in source
+    def fail_fetch(*args, **kwargs):
+        calls.append("fetch")
+        raise AssertionError("fixture mode must not call HTTP")
+
+    monkeypatch.setattr(http_client, "fetch_json", fail_fetch)
+    with tempfile.TemporaryDirectory() as tmp:
+        outputs = import_fixtures(
+            submissions_fixture=SUBMISSIONS_FIXTURE,
+            companyfacts_fixture=COMPANYFACTS_FIXTURE,
+            ticker="MU",
+            company_name="Micron Technology",
+            out_dir=Path(tmp) / "out",
+        )
+
+    assert calls == []
+    assert outputs["facts_count"] == 7
 
 
 def test_cli_dry_run_works() -> None:
@@ -265,6 +275,8 @@ def test_pm_prompt_path_is_not_touched() -> None:
         SRC / "ai_pm_agent" / "evidence_db" / "repository.py",
         SRC / "ai_pm_agent" / "evidence_db" / "exports.py",
         SRC / "ai_pm_agent" / "evidence_db" / "warnings.py",
+        SRC / "ai_pm_agent" / "evidence_db" / "http_client.py",
+        SRC / "ai_pm_agent" / "evidence_db" / "cache.py",
         SCRIPT,
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in evidence_sources)
