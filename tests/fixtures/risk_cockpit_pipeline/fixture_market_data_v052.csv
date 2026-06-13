@@ -1,0 +1,8 @@
+ticker,price,currency,as_of_date,source,source_confidence,fixture_only,notes
+TQQQ,72.50,USD,2026-06-13,local_fixture,medium,true,fixture review context
+NVDA,126.00,USD,2026-06-13,local_fixture,medium,true,close to short put source price
+MU,119.00,USD,2026-06-13,local_fixture,medium,true,close to short put source price
+AMD,161.00,USD,2026-06-13,local_fixture,medium,true,close to short put source price
+AVGO,1000.00,USD,2026-06-13,local_fixture,medium,true,intentional short put price mismatch fixture
+MSFT,421.00,USD,2026-06-01,local_fixture,medium,true,intentional stale market data fixture
+ETHA,20.00,USD,2026-06-13,local_fixture,low,true,crypto ETF fixture context
