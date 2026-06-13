@@ -1,0 +1,8 @@
+ticker,instrument_type,quantity,currency,market_value,notional_value,exposure_multiplier,underlying_ticker,theme,region,notes
+TQQQ,leveraged_etf,100,USD,10000,10000,3,,Nasdaq;mega-cap tech,North America,fixture leveraged ETF
+NVDA,stock,50,USD,6000,6000,1,,AI infrastructure;semiconductor,North America,fixture stock
+MU,stock,80,USD,5000,5000,1,,AI infrastructure;semiconductor,North America,fixture stock
+ETHA,crypto_etf,40,USD,2000,2000,1,ETH,crypto beta,Global,fixture crypto ETF
+SGD_CASH,cash,1,SGD,3000,3000,1,,cash,Asia,fixture SGD cash proxy
+NVDA_PUT_SHORT,short_option,-1,USD,-500,10000,1,NVDA,semiconductor,North America,fixture short option needs review
+ALT_UNKNOWN,structured_note,1,USD,1500,1500,1,,other,North America,fixture unknown instrument type
