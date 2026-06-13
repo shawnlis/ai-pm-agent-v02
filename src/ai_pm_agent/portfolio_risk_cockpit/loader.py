@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ai_pm_agent.portfolio_risk_cockpit.models import (
+    DISALLOWED_REAL_PORTFOLIO_INPUT,
     NEEDS_REVIEW,
     REVIEW_OK,
     SHORT_OPTION_NEEDS_REVIEW,
@@ -41,6 +42,7 @@ class PortfolioRiskCockpitError(ValueError):
 
 def load_positions_from_csv(path: str | Path) -> list[PortfolioRiskPosition]:
     input_path = Path(path)
+    _reject_real_data_path(input_path)
     if not input_path.exists():
         raise PortfolioRiskCockpitError(f"portfolio risk input file not found: {input_path}")
     if input_path.suffix.lower() != ".csv":
@@ -55,6 +57,22 @@ def load_positions_from_csv(path: str | Path) -> list[PortfolioRiskPosition]:
                 f"{input_path} missing required columns: {', '.join(missing_columns)}"
             )
         return [_position_from_row(_clean_row(row), row_number) for row_number, row in enumerate(reader, start=2)]
+
+
+def _reject_real_data_path(path: Path) -> None:
+    text = str(path).lower()
+    basename = path.name.lower()
+    parts = [part.lower() for part in path.parts]
+    disallowed = (
+        basename == "portfolio.csv"
+        or any("ibkr positions" in part for part in parts)
+        or any(marker in text for marker in ("ibkr", "broker", "client"))
+    )
+    if disallowed:
+        raise PortfolioRiskCockpitError(
+            f"{DISALLOWED_REAL_PORTFOLIO_INPUT}: Portfolio Risk Cockpit Phase 1 accepts fixture CSV input only "
+            "and refuses real portfolio/broker/client-looking paths before reading file contents."
+        )
 
 
 def _position_from_row(row: dict[str, str], row_number: int) -> PortfolioRiskPosition:

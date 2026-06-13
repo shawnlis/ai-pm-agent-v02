@@ -47,6 +47,8 @@ STRESS_SCENARIO_FIELDS = [
     "impacted_exposure",
     "estimated_impact_value",
     "estimated_impact_pct_of_gross_market_value",
+    "review_status",
+    "warning_codes",
     "notes",
 ]
 

@@ -25,6 +25,9 @@ Phase 1 accepts CSV fixture input only. The required columns are:
 
 Validation is fail-closed for blank tickers, blank currencies, missing required columns, invalid numeric values, and leveraged ETF rows that do not explicitly show `exposure_multiplier`.
 
+Before reading any file content, Phase 1 refuses real-data-looking paths such as `portfolio.csv`, `IBKR Positions/`, paths containing `ibkr`, broker paths, and client paths.
+The guard raises `DISALLOWED_REAL_PORTFOLIO_INPUT` because this phase accepts fixture CSV input only.
+
 Unknown `instrument_type` rows are loaded with `NEEDS_REVIEW` and `UNKNOWN_INSTRUMENT_TYPE`.
 Short option rows are loaded with `NEEDS_REVIEW` and `SHORT_OPTION_NEEDS_REVIEW`.
 
@@ -52,6 +55,8 @@ The summary JSON includes stable boundary fields showing no broker connection, n
 - No IBKR, broker, order, or trading workflow is connected.
 - No live market data, yfinance, web search, LLM, OpenRouter, or DeepSeek is used.
 - No client data is used.
+- `portfolio.csv` is not used.
+- IBKR content is not inspected.
 - No portfolio data is wired into PM prompts, ratings, actions, or recommendation logic.
 - No buy, sell, hold, sizing, rebalance, order, or trade instruction is produced.
 - Generated reports, caches, and databases remain local and ignored.
@@ -66,7 +71,8 @@ Phase 1 includes simple deterministic scenario rows:
 - ETH/BTC -20%
 
 These are rough risk-impact views based only on supplied row tags, tickers, currencies, and exposure multipliers.
-They are not VaR, margin, beta, liquidation, tax, suitability, or advice models.
+Short-option and unknown-instrument warning codes propagate into affected stress scenario rows, so review-risk positions do not appear clean in stress output.
+They are not payoff, margin, greek, VaR, beta, liquidation, tax, suitability, or advice models.
 
 ## Known Limitations
 

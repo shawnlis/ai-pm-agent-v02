@@ -12,12 +12,18 @@ NEEDS_REVIEW = "NEEDS_REVIEW"
 
 UNKNOWN_INSTRUMENT_TYPE = "UNKNOWN_INSTRUMENT_TYPE"
 SHORT_OPTION_NEEDS_REVIEW = "SHORT_OPTION_NEEDS_REVIEW"
+DISALLOWED_REAL_PORTFOLIO_INPUT = "DISALLOWED_REAL_PORTFOLIO_INPUT"
 
 SAFETY_BOUNDARY = {
     "system_type": "portfolio_risk_cockpit",
+    "fixture_input_only": True,
     "risk_report_only": True,
     "investment_recommendation": False,
     "client_advice": False,
+    "portfolio_csv_used": False,
+    "ibkr_content_inspected": False,
+    "broker_data_used": False,
+    "client_data_used": False,
     "broker_connection": False,
     "trading": False,
     "network_access": False,

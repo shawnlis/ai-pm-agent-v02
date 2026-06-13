@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ai_pm_agent.portfolio_risk_cockpit.exposure import calculate_totals
-from ai_pm_agent.portfolio_risk_cockpit.models import PortfolioRiskPosition
+from ai_pm_agent.portfolio_risk_cockpit.models import NEEDS_REVIEW, REVIEW_OK, PortfolioRiskPosition
 
 
 SCENARIOS = [
@@ -37,6 +37,8 @@ def calculate_stress_scenarios(positions: list[PortfolioRiskPosition]) -> list[d
         matched = [position for position in positions if _matches_scenario(position, str(scenario["scenario"]))]
         impacted_exposure = sum(position.leverage_adjusted_exposure for position in matched)
         estimated_impact_value = impacted_exposure * float(scenario["shock_pct"])
+        warning_codes = sorted({code for position in matched for code in position.warning_codes})
+        review_status = NEEDS_REVIEW if any(position.is_needs_review for position in matched) else REVIEW_OK
         rows.append(
             {
                 "scenario": scenario["scenario"],
@@ -48,6 +50,8 @@ def calculate_stress_scenarios(positions: list[PortfolioRiskPosition]) -> list[d
                     estimated_impact_value,
                     total_gross_market_value,
                 ),
+                "review_status": review_status,
+                "warning_codes": ";".join(warning_codes),
                 "notes": scenario["notes"],
             }
         )

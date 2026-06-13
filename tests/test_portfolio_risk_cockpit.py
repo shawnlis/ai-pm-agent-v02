@@ -24,6 +24,7 @@ from ai_pm_agent.portfolio_risk_cockpit.runner import run_cockpit
 from ai_pm_agent.portfolio_risk_cockpit.schema import (
     CURRENCY_EXPOSURE_FILENAME,
     REPORT_FILENAME,
+    STRESS_SCENARIO_FIELDS,
     STRESS_SCENARIOS_FILENAME,
     SUMMARY_FILENAME,
     THEME_EXPOSURE_FILENAME,
@@ -68,6 +69,46 @@ def test_missing_required_fields_fail_closed() -> None:
         missing_currency = _write_rows(tmp_path, [{"ticker": "NVDA", "currency": ""}], name="missing_currency.csv")
         with pytest.raises(PortfolioRiskCockpitError, match="currency must not be blank"):
             load_positions_from_csv(missing_currency)
+
+
+def test_portfolio_csv_path_fails_closed_before_reading() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "portfolio.csv"
+
+        with pytest.raises(PortfolioRiskCockpitError) as exc_info:
+            load_positions_from_csv(path)
+
+    message = str(exc_info.value)
+    assert "DISALLOWED_REAL_PORTFOLIO_INPUT" in message
+    assert "fixture CSV input only" in message
+    assert "not found" not in message
+
+
+def test_ibkr_positions_path_fails_closed_before_reading() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "IBKR Positions" / "positions.csv"
+
+        with pytest.raises(PortfolioRiskCockpitError) as exc_info:
+            load_positions_from_csv(path)
+
+    message = str(exc_info.value)
+    assert "DISALLOWED_REAL_PORTFOLIO_INPUT" in message
+    assert "fixture CSV input only" in message
+    assert "not found" not in message
+
+
+def test_ibkr_broker_or_client_path_text_fails_closed() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        disallowed_paths = [
+            root / "ibkr_export.csv",
+            root / "broker_export.csv",
+            root / "client_export.csv",
+        ]
+
+        for path in disallowed_paths:
+            with pytest.raises(PortfolioRiskCockpitError, match="DISALLOWED_REAL_PORTFOLIO_INPUT"):
+                load_positions_from_csv(path)
 
 
 def test_invalid_numeric_values_fail_closed() -> None:
@@ -123,6 +164,30 @@ def test_stress_scenario_outputs_are_generated() -> None:
         assert any(row["impacted_exposure"] != "0" for row in rows)
 
 
+def test_stress_scenario_rows_impacted_by_review_positions_are_flagged() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_cockpit(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        rows = list(csv.DictReader((tmp_path / STRESS_SCENARIOS_FILENAME).open(newline="", encoding="utf-8")))
+        semis_row = next(row for row in rows if row["scenario"] == "Semis -15%")
+
+        assert semis_row["review_status"] == "NEEDS_REVIEW"
+        assert "SHORT_OPTION_NEEDS_REVIEW" in semis_row["warning_codes"]
+
+
+def test_stress_scenario_csv_schema_includes_review_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_cockpit(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        with (tmp_path / STRESS_SCENARIOS_FILENAME).open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = reader.fieldnames or []
+
+        assert fieldnames == STRESS_SCENARIO_FIELDS
+        assert "review_status" in fieldnames
+        assert "warning_codes" in fieldnames
+
+
 def test_report_schema_is_stable() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -132,7 +197,12 @@ def test_report_schema_is_stable() -> None:
         assert set(summary) == EXPECTED_SUMMARY_KEYS
         assert summary["schema_version"] == "v0.5.0-phase1"
         assert summary["boundary"]["risk_report_only"] is True
+        assert summary["boundary"]["fixture_input_only"] is True
         assert summary["boundary"]["investment_recommendation"] is False
+        assert summary["boundary"]["portfolio_csv_used"] is False
+        assert summary["boundary"]["ibkr_content_inspected"] is False
+        assert summary["boundary"]["broker_data_used"] is False
+        assert summary["boundary"]["client_data_used"] is False
         assert (tmp_path / REPORT_FILENAME).exists()
         assert (tmp_path / TICKER_EXPOSURE_FILENAME).exists()
         assert (tmp_path / THEME_EXPOSURE_FILENAME).exists()

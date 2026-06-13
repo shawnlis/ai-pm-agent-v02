@@ -167,17 +167,19 @@ def _table(rows: list[dict[str, Any]], first_field: str) -> str:
 
 def _stress_table(rows: list[dict[str, Any]]) -> str:
     lines = [
-        "| Scenario | Shock | Impacted Exposure | Estimated Impact | Impact / Gross MV |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Scenario | Shock | Impacted Exposure | Estimated Impact | Impact / Gross MV | Review | Warnings |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {scenario} | {shock} | {exposure} | {impact} | {pct} |".format(
+            "| {scenario} | {shock} | {exposure} | {impact} | {pct} | {review} | {warnings} |".format(
                 scenario=row["scenario"],
                 shock=_pct(float(row["shock_pct"])),
                 exposure=_money(float(row["impacted_exposure"])),
                 impact=_money(float(row["estimated_impact_value"])),
                 pct=_pct(float(row["estimated_impact_pct_of_gross_market_value"])),
+                review=row.get("review_status", ""),
+                warnings=row.get("warning_codes", ""),
             )
         )
     return "\n".join(lines)
