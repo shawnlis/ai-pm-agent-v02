@@ -114,6 +114,8 @@ python .\scripts\sec_ir_evidence_batch_import.py `
   --offline
 ```
 
+Export-only mode is read-only and does not use network. The batch manifest keeps current-run `network_access` as `false` while preserving source provenance separately through `source_api_level`, `source_fixture_only`, and `source_live_sec_api`. If source provenance cannot be determined from the re-exported manifest or source rows, the batch manifest uses `UNKNOWN` rather than claiming fixture-only provenance.
+
 Run local fixture mode for tests or fixture development:
 
 ```powershell

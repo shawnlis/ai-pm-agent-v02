@@ -256,7 +256,7 @@ def run_batch(
 
         standard_outputs = {key: str(value) for key, value in outputs.items() if isinstance(value, str)}
         status = str(outputs.get("status") or "completed")
-        warning_codes = _warning_codes_for_company(plan.out_dir, company.ticker)
+        warning_codes = _warning_codes_for_company_from_database(plan.db_path, company.ticker)
         if status != "completed":
             warning_codes.append(WARNING_BATCH_COMPANY_FAILED)
             warnings.append(
@@ -402,14 +402,15 @@ def _export_current_database(db_path: Path, out_dir: Path, plan: BatchPlan) -> d
 
 def _export_existing_database(db_path: Path, out_dir: Path, plan: BatchPlan) -> dict[str, str]:
     with EvidenceRepository(db_path, read_only=True) as repo:
+        provenance = _source_provenance_from_repo(repo)
         return export_all(
             repo,
             out_dir,
             manifest_context={
-                "api_level": plan.api_level,
-                "fixture_only": not plan.live_sec_fetch,
+                "api_level": provenance["source_api_level"] if provenance["source_api_level"] != "UNKNOWN" else plan.api_level,
+                "fixture_only": provenance["source_fixture_only"] if provenance["source_fixture_only"] != "UNKNOWN" else not plan.live_sec_fetch,
                 "network_access": False,
-                "live_sec_api": False,
+                "live_sec_api": provenance["source_live_sec_api"] if provenance["source_live_sec_api"] != "UNKNOWN" else False,
             },
             report_filename="SEC_IR_EVIDENCE_DB_BATCH_EXPORT_REPORT.md",
         )
@@ -432,6 +433,7 @@ def _summary_from_database(db_path: Path, companies: tuple[BatchCompany, ...], o
                     warnings_count=warnings_count,
                     newest_source_date=_newest_source_date_from_repo(repo, company.ticker),
                     output_dir=out_dir,
+                    warning_codes=_warning_codes_for_company_from_repo(repo, company.ticker),
                 )
             )
     return rows
@@ -488,6 +490,8 @@ def _build_manifest(
 ) -> dict[str, Any]:
     completed = [row["ticker"] for row in summary_rows if row["status"] in {"completed", "exported"}]
     failed = [row["ticker"] for row in summary_rows if row["status"] in {"failed", "missing_evidence"}]
+    provenance = _source_provenance_from_manifest(standard_manifest)
+    global_evidence_warning_codes = sorted(str(code) for code in (standard_manifest.get("warning_codes") or []))
     warning_codes = sorted({code for warning in warnings for code in [warning["code"]]} | _summary_warning_codes(summary_rows))
     return {
         "run_id": run_id,
@@ -496,16 +500,20 @@ def _build_manifest(
         "companies_requested": [company.ticker for company in plan.companies],
         "companies_completed": completed,
         "companies_failed": failed,
-        "api_level": standard_manifest.get("api_level", plan.api_level),
-        "fixture_only": not plan.live_sec_fetch,
+        "api_level": provenance["source_api_level"],
+        "fixture_only": provenance["source_fixture_only"],
         "network_access": plan.network_access,
-        "live_sec_api": plan.live_sec_fetch,
+        "live_sec_api": provenance["source_live_sec_api"],
+        "source_api_level": provenance["source_api_level"],
+        "source_fixture_only": provenance["source_fixture_only"],
+        "source_live_sec_api": provenance["source_live_sec_api"],
         "cache_used": bool(standard_manifest.get("cache_used", False)),
         "force_refresh": force_refresh,
         "dry_run": plan.dry_run,
         "export_only": plan.export_only,
         "continue_on_company_error": continue_on_company_error,
         "per_company_output_status": summary_rows,
+        "global_evidence_warning_codes": global_evidence_warning_codes,
         "warning_codes": warning_codes,
         "warnings": warnings,
         "standard_outputs": {
@@ -529,6 +537,75 @@ def _summary_warning_codes(summary_rows: list[dict[str, Any]]) -> set[str]:
     for row in summary_rows:
         codes.update(code for code in str(row.get("warning_codes") or "").split(";") if code)
     return codes
+
+
+def _source_provenance_from_manifest(standard_manifest: dict[str, Any]) -> dict[str, Any]:
+    sources = [source for source in standard_manifest.get("sources", []) if isinstance(source, dict)]
+    api_levels = {
+        str(source.get("source_level") or source.get("metadata", {}).get("api_level") or "").strip()
+        for source in sources
+        if str(source.get("source_level") or source.get("metadata", {}).get("api_level") or "").strip()
+    }
+    if not api_levels and standard_manifest.get("api_level"):
+        api_levels.add(str(standard_manifest["api_level"]))
+
+    fixture_values = {bool(source["fixture_only"]) for source in sources if "fixture_only" in source}
+    live_values = {
+        bool(source.get("metadata", {}).get("live_sec_api"))
+        for source in sources
+        if isinstance(source.get("metadata"), dict) and "live_sec_api" in source["metadata"]
+    }
+    if any(str(source.get("source_type") or "") == "SEC_EDGAR_PUBLIC_API" for source in sources):
+        live_values.add(True)
+    if not live_values and "live_sec_api" in standard_manifest and sources:
+        live_values.add(bool(standard_manifest["live_sec_api"]))
+
+    return {
+        "source_api_level": _collapse_values(api_levels),
+        "source_fixture_only": _collapse_values(fixture_values),
+        "source_live_sec_api": _collapse_values(live_values),
+    }
+
+
+def _source_provenance_from_repo(repo: EvidenceRepository) -> dict[str, Any]:
+    rows = repo.fetch_all(
+        """
+        SELECT source_type, fixture_only, metadata_json
+        FROM source_documents
+        """
+    )
+    api_levels: set[str] = set()
+    fixture_values: set[bool] = set()
+    live_values: set[bool] = set()
+    for row in rows:
+        metadata = _json_loads(str(row["metadata_json"] or "{}"))
+        api_level = str(metadata.get("api_level") or "").strip()
+        if api_level:
+            api_levels.add(api_level)
+        fixture_values.add(bool(row["fixture_only"]))
+        if "live_sec_api" in metadata:
+            live_values.add(bool(metadata["live_sec_api"]))
+        if str(row["source_type"] or "") == "SEC_EDGAR_PUBLIC_API":
+            live_values.add(True)
+            api_levels.add("Level 1")
+    return {
+        "source_api_level": _collapse_values(api_levels),
+        "source_fixture_only": _collapse_values(fixture_values),
+        "source_live_sec_api": _collapse_values(live_values),
+    }
+
+
+def _collapse_values(values: set[Any]) -> Any:
+    cleaned = {value for value in values if value != ""}
+    if not cleaned:
+        return "UNKNOWN"
+    if len(cleaned) == 1:
+        return next(iter(cleaned))
+    if True in cleaned and False in cleaned:
+        return "MIXED"
+    if "Level 1" in cleaned:
+        return "Level 1"
+    return "MIXED"
 
 
 def _write_batch_outputs(
@@ -606,10 +683,23 @@ def _warning(code: str, message: str, *, ticker: str = "") -> dict[str, Any]:
     return {"code": code, "message": message, "ticker": ticker, "created_at": utc_now()}
 
 
-def _warning_codes_for_company(out_dir: Path, ticker: str) -> list[str]:
-    manifest = _load_standard_manifest(out_dir)
-    codes = set(manifest.get("warning_codes") or [])
-    return sorted(str(code) for code in codes)
+def _warning_codes_for_company_from_database(db_path: Path, ticker: str) -> list[str]:
+    with EvidenceRepository(db_path, read_only=True) as repo:
+        return _warning_codes_for_company_from_repo(repo, ticker)
+
+
+def _warning_codes_for_company_from_repo(repo: EvidenceRepository, ticker: str) -> list[str]:
+    rows = repo.fetch_all(
+        """
+        SELECT DISTINCT iw.code
+        FROM ingestion_warnings iw
+        JOIN ingestion_runs ir ON ir.run_id = iw.run_id
+        WHERE ir.ticker = ?
+        ORDER BY iw.code
+        """,
+        (ticker,),
+    )
+    return [str(row["code"]) for row in rows]
 
 
 def _newest_source_date(out_dir: Path, ticker: str) -> str:
@@ -629,6 +719,14 @@ def _load_standard_manifest(out_dir: Path) -> dict[str, Any]:
         return {}
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _json_loads(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value)
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}

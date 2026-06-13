@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import hashlib
 import json
 import subprocess
 import sys
@@ -25,6 +26,9 @@ from ai_pm_agent.evidence_db.batch_runner import (
     generate_batch_plan,
     run_batch,
 )
+from ai_pm_agent.evidence_db.http_client import HttpJsonResponse
+from ai_pm_agent.evidence_db.sec_edgar import import_live_sec
+from ai_pm_agent.evidence_db.warnings import MISSING_FACT_VALUE
 
 
 SCRIPT = ROOT / "scripts" / "sec_ir_evidence_batch_import.py"
@@ -43,6 +47,7 @@ EXPECTED_MANIFEST_KEYS = {
     "fixture_only",
     "force_refresh",
     "generated_at",
+    "global_evidence_warning_codes",
     "live_sec_api",
     "network_access",
     "no_broker_data",
@@ -53,6 +58,9 @@ EXPECTED_MANIFEST_KEYS = {
     "no_yfinance",
     "per_company_output_status",
     "run_id",
+    "source_api_level",
+    "source_fixture_only",
+    "source_live_sec_api",
     "standard_outputs",
     "universe",
     "warning_codes",
@@ -179,6 +187,73 @@ def test_batch_manifest_schema_is_stable() -> None:
     assert manifest["no_yfinance"] is True
 
 
+def test_export_only_preserves_live_source_provenance(monkeypatch) -> None:
+    submissions_payload = json.loads(SUBMISSIONS_FIXTURE.read_text(encoding="utf-8"))
+    companyfacts_payload = json.loads(COMPANYFACTS_FIXTURE.read_text(encoding="utf-8"))
+
+    def fake_fetch(url: str, user_agent: str):
+        if "companyfacts" in url:
+            return _response(url, companyfacts_payload)
+        return _response(url, submissions_payload)
+
+    monkeypatch.setattr(http_client, "fetch_json", fake_fetch)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        live_db = tmp_path / "live" / "evidence_db.sqlite"
+        import_live_sec(
+            ticker="MU",
+            company_name="Micron Technology",
+            user_agent="Unit Test unit@example.com",
+            cik="723125",
+            out_dir=tmp_path / "live",
+            db_path=live_db,
+            cache_dir=tmp_path / "cache",
+        )
+
+        result = run_batch(
+            universe=AI_INFRA_CORE_UNIVERSE,
+            companies=["MU"],
+            db_path=live_db,
+            out_dir=tmp_path / "export",
+            export_only=True,
+            offline=True,
+        )
+        batch_manifest = result["manifest"]
+        source_manifest = json.loads((tmp_path / "export" / "source_manifest.json").read_text(encoding="utf-8"))
+
+    assert batch_manifest["network_access"] is False
+    assert batch_manifest["source_api_level"] == "Level 1"
+    assert batch_manifest["source_fixture_only"] is False
+    assert batch_manifest["source_live_sec_api"] is True
+    assert batch_manifest["fixture_only"] is False
+    assert batch_manifest["live_sec_api"] is True
+    assert source_manifest["network_access"] is False
+    assert source_manifest["api_level"] == "Level 1"
+    assert source_manifest["fixture_only"] is False
+    assert source_manifest["live_sec_api"] is True
+
+
+def test_company_warning_codes_are_not_polluted_by_global_warning_codes() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        bad_companyfacts = _companyfacts_missing_value(tmp_path / "MU_companyfacts_bad.json")
+        result = run_batch(
+            universe=AI_INFRA_CORE_UNIVERSE,
+            companies=["MU", "AMD"],
+            out_dir=tmp_path / "out",
+            fixture_paths={
+                "MU": FixturePaths(submissions_fixture=SUBMISSIONS_FIXTURE, companyfacts_fixture=bad_companyfacts),
+                "AMD": _fixture_pair(),
+            },
+            continue_on_company_error=True,
+        )
+
+    rows = {row["ticker"]: row for row in result["manifest"]["per_company_output_status"]}
+    assert MISSING_FACT_VALUE in rows["MU"]["warning_codes"]
+    assert MISSING_FACT_VALUE not in rows["AMD"]["warning_codes"]
+    assert MISSING_FACT_VALUE in result["manifest"]["global_evidence_warning_codes"]
+
+
 def test_company_summary_csv_schema_is_stable() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         result = run_batch(
@@ -278,6 +353,25 @@ def test_cli_dry_run_writes_batch_plan_without_standard_import_outputs() -> None
 
 def _fixture_pair() -> FixturePaths:
     return FixturePaths(submissions_fixture=SUBMISSIONS_FIXTURE, companyfacts_fixture=COMPANYFACTS_FIXTURE)
+
+
+def _companyfacts_missing_value(path: Path) -> Path:
+    payload = json.loads(COMPANYFACTS_FIXTURE.read_text(encoding="utf-8"))
+    payload["facts"]["us-gaap"]["Revenues"]["units"]["USD"][0].pop("val")
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _response(url: str, payload: object) -> HttpJsonResponse:
+    raw_text = json.dumps(payload, sort_keys=True)
+    return HttpJsonResponse(
+        url=url,
+        payload=payload,
+        raw_text=raw_text,
+        sha256=hashlib.sha256(raw_text.encode("utf-8")).hexdigest(),
+        retrieved_at="2026-06-13T00:00:00+00:00",
+        status_code=200,
+    )
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
