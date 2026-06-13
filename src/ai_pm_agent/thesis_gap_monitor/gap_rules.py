@@ -21,6 +21,7 @@ from .models import (
 
 NO_MATCHING_EVIDENCE = "NO_MATCHING_EVIDENCE"
 MISSING_COMPANY_EVIDENCE = "MISSING_COMPANY_EVIDENCE"
+MISSING_SOURCE_DATE = "MISSING_SOURCE_DATE"
 STALE_EVIDENCE = "STALE_EVIDENCE"
 AMBIGUOUS_EVIDENCE = "AMBIGUOUS_EVIDENCE"
 WEAK_EVIDENCE_ONLY = "WEAK_EVIDENCE_ONLY"
@@ -112,7 +113,12 @@ def evaluate_gaps(
 
     status_counts = {status: 0 for status in GAP_STATUSES}
     status_counts.update(Counter(gap.current_status for gap in gaps))
-    warnings = tuple(sorted({code for gap in gaps for code in gap.warning_codes}))
+    warnings = tuple(
+        sorted(
+            {code for gap in gaps for code in gap.warning_codes}
+            | {code for source in coverage for code in source.warning_codes}
+        )
+    )
     return MonitorResult(
         gaps=gaps,
         coverage=coverage,
@@ -147,6 +153,7 @@ def _evaluate_company_theme(
     matched_rows = matching_ledger + matching_metrics
     source_count = len({_source_key(row) for row in matched_rows if _source_key(row)})
     newest_source_date = _newest_date(matched_rows)
+    missing_source_date = bool(matched_rows) and not newest_source_date
     stale = _is_stale(newest_source_date, as_of_date=as_of_date, stale_days=stale_days)
     warning_codes = set(manifest_warning_codes)
 
@@ -212,6 +219,15 @@ def _evaluate_company_theme(
         warning_codes.add(AMBIGUOUS_EVIDENCE)
         human_review_required = True
 
+    if missing_source_date:
+        warning_codes.add(MISSING_SOURCE_DATE)
+        confidence = "low"
+        human_review_required = True
+        if status == "CLOSED":
+            status = "PARTIALLY_CLOSED"
+        elif status == "UNCHANGED":
+            status = "NEEDS_REVIEW"
+
     if stale:
         warning_codes.add(STALE_EVIDENCE)
         confidence = "low"
@@ -253,6 +269,9 @@ def _source_coverage(
     if not all_rows:
         warning_codes.add(MISSING_COMPANY_EVIDENCE)
         status = "NO_COMPANY_EVIDENCE"
+    elif not newest:
+        warning_codes.add(MISSING_SOURCE_DATE)
+        status = "NEEDS_REVIEW"
     elif stale:
         warning_codes.add(STALE_EVIDENCE)
         status = "STALE"

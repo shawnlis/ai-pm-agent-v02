@@ -116,6 +116,54 @@ def test_stale_evidence_warning_is_emitted() -> None:
     assert "STALE_EVIDENCE" in warnings_md
 
 
+def test_matched_evidence_with_missing_source_dates_does_not_become_closed() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence_dir = _write_missing_date_evidence_bundle(Path(tmp) / "evidence")
+        out_dir = Path(tmp) / "out"
+        run_monitor(evidence_dir=evidence_dir, out_dir=out_dir, tickers=["AMD"], as_of_date=_as_of())
+        rows = _read_csv(out_dir / "thesis_gap_table.csv")
+
+    by_theme = {row["theme"]: row for row in rows}
+    gpu_gap = by_theme["GPU / accelerator demand"]
+    assert gpu_gap["current_status"] == "PARTIALLY_CLOSED"
+    assert gpu_gap["confidence"] == "low"
+    assert gpu_gap["human_review_required"] == "true"
+
+
+def test_missing_source_dates_emit_warning() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence_dir = _write_missing_date_evidence_bundle(Path(tmp) / "evidence")
+        out_dir = Path(tmp) / "out"
+        run_monitor(evidence_dir=evidence_dir, out_dir=out_dir, tickers=["AMD"], as_of_date=_as_of())
+        rows = _read_csv(out_dir / "thesis_gap_table.csv")
+
+    gpu_gap = {row["theme"]: row for row in rows}["GPU / accelerator demand"]
+    assert "MISSING_SOURCE_DATE" in gpu_gap["warning_codes"]
+
+
+def test_source_coverage_with_rows_but_no_parseable_source_date_needs_review() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence_dir = _write_missing_date_evidence_bundle(Path(tmp) / "evidence")
+        out_dir = Path(tmp) / "out"
+        run_monitor(evidence_dir=evidence_dir, out_dir=out_dir, tickers=["AMD"], as_of_date=_as_of())
+        coverage_rows = _read_csv(out_dir / "source_coverage.csv")
+
+    assert coverage_rows[0]["coverage_status"] == "NEEDS_REVIEW"
+    assert "MISSING_SOURCE_DATE" in coverage_rows[0]["warning_codes"]
+
+
+def test_summary_and_warnings_include_missing_source_date() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        evidence_dir = _write_missing_date_evidence_bundle(Path(tmp) / "evidence")
+        out_dir = Path(tmp) / "out"
+        run_monitor(evidence_dir=evidence_dir, out_dir=out_dir, tickers=["AMD"], as_of_date=_as_of())
+        summary = json.loads((out_dir / "thesis_gap_summary.json").read_text(encoding="utf-8"))
+        warnings_md = (out_dir / "monitor_warnings.md").read_text(encoding="utf-8")
+
+    assert "MISSING_SOURCE_DATE" in summary["warning_codes"]
+    assert "MISSING_SOURCE_DATE" in warnings_md
+
+
 def test_report_files_are_generated() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         evidence_dir = _write_evidence_bundle(Path(tmp) / "evidence")
@@ -314,6 +362,59 @@ def _write_evidence_bundle(directory: Path) -> Path:
                 "source_name": "AMD fixture evidence",
                 "hash_sha256": "hash_amd_gpu",
                 "source_date": "2026-03-01",
+            },
+        ],
+    }
+    (directory / "source_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (directory / "ingestion_warnings.md").write_text("# Warnings\n\n- none\n", encoding="utf-8")
+    return directory
+
+
+def _write_missing_date_evidence_bundle(directory: Path) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    _write_csv(
+        directory / "company_evidence_ledger.csv",
+        LEDGER_FIELDS,
+        [
+            _ledger_row(
+                ticker="AMD",
+                company_name="Advanced Micro Devices",
+                source_hash="hash_amd_undated_gpu",
+                source_date="",
+                metric_or_form="GPU accelerator commercial shipment with material revenue contribution",
+                review_status="source_backed",
+            ),
+        ],
+    )
+    _write_csv(
+        directory / "metric_history.csv",
+        METRIC_FIELDS,
+        [
+            _metric_row(
+                ticker="AMD",
+                company_name="Advanced Micro Devices",
+                source_hash="hash_amd_undated_metric",
+                end_date="not-a-date",
+                filed_date="",
+                concept="Revenues",
+                label="Recognized revenue from GPU accelerator commercial shipment",
+            ),
+        ],
+    )
+    manifest = {
+        "api_level": "Level 1",
+        "fixture_only": False,
+        "network_access": False,
+        "live_sec_api": False,
+        "pm_prompt_wiring": False,
+        "warning_codes": [],
+        "sources": [
+            {
+                "ticker": "AMD",
+                "company_name": "Advanced Micro Devices",
+                "source_name": "AMD undated fixture evidence",
+                "hash_sha256": "hash_amd_undated_gpu",
+                "source_date": "",
             },
         ],
     }

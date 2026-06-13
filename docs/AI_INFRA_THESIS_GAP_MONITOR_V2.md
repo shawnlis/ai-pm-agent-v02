@@ -116,6 +116,7 @@ Conservative rules:
 - Explicit company filing or official IR evidence can improve a gap.
 - Stale evidence weakens confidence.
 - Missing evidence stays `UNKNOWN`.
+- Missing or unparsable source dates require human review and cannot fully close a gap.
 - Ambiguous language stays `NEEDS_REVIEW`.
 - Capex growth without monetization evidence is flagged as margin-risk or ROI-risk, not automatically positive.
 - Sample evidence does not equal qualification.
