@@ -35,6 +35,7 @@ def write_pipeline_index(
     monitor_status: str,
     files_created: list[str],
     warning_codes: list[str],
+    error_message: str = "",
 ) -> dict[str, Any]:
     """Write the stable pipeline index contract and return its payload."""
 
@@ -52,6 +53,7 @@ def write_pipeline_index(
         "monitor_status": monitor_status,
         "files_created": sorted(set(files_created + [str(index_path)])),
         "warning_codes": sorted(set(warning_codes)),
+        "error_message": error_message,
     }
     payload.update(BOUNDARY_FIELDS)
     index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

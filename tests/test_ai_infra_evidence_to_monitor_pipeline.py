@@ -5,6 +5,7 @@ import csv
 from datetime import date
 import json
 import socket
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -19,6 +20,8 @@ from ai_pm_agent.ai_infra_pipeline.report_index import PIPELINE_INDEX_FILENAME
 from ai_pm_agent.ai_infra_pipeline.runner import DEFAULT_PIPELINE_BATCH_DIR, run_pipeline
 from ai_pm_agent.thesis_gap_monitor.evidence_reader import MissingEvidenceInputError
 
+
+SCRIPT = ROOT / "scripts" / "ai_infra_evidence_to_monitor_pipeline.py"
 
 LEDGER_FIELDS = [
     "company_id",
@@ -69,6 +72,7 @@ EXPECTED_INDEX_KEYS = {
     "batch_status",
     "companies",
     "evidence_input_dir",
+    "error_message",
     "files_created",
     "generated_at",
     "monitor_output_dir",
@@ -146,6 +150,101 @@ def test_missing_evidence_dir_fails_closed() -> None:
             assert "Evidence input directory does not exist" in str(exc)
         else:
             raise AssertionError("missing evidence directory should fail closed")
+
+
+def test_existing_evidence_dir_missing_required_files_writes_failure_index() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        monitor_dir = root / "monitor"
+        result = run_pipeline(
+            evidence_dir=evidence_dir,
+            monitor_out_dir=monitor_dir,
+            companies=["MU"],
+            offline=True,
+        )
+        index = json.loads((monitor_dir / PIPELINE_INDEX_FILENAME).read_text(encoding="utf-8"))
+
+    assert result["status"] == "failed"
+    assert index["batch_status"] == "not_run"
+    assert index["monitor_status"] == "failed"
+    assert "MONITOR_FAILED" in index["warning_codes"]
+    assert "PIPELINE_FAILED_CLOSED" in index["warning_codes"]
+    assert "Missing required evidence files" in index["error_message"]
+
+
+def test_batch_dry_run_then_monitor_failure_preserves_batch_files_and_cli_fails() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        batch_dir = root / "batch"
+        monitor_dir = root / "monitor"
+        result = run_pipeline(
+            evidence_dir=evidence_dir,
+            batch_out_dir=batch_dir,
+            monitor_out_dir=monitor_dir,
+            run_batch_dry_run=True,
+            run_monitor_step=True,
+            companies=["MU"],
+            offline=True,
+        )
+        index = json.loads((monitor_dir / PIPELINE_INDEX_FILENAME).read_text(encoding="utf-8"))
+        cli_result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--evidence-dir",
+                str(evidence_dir),
+                "--batch-out-dir",
+                str(root / "cli_batch"),
+                "--monitor-out-dir",
+                str(root / "cli_monitor"),
+                "--run-batch-dry-run",
+                "--run-monitor",
+                "--companies",
+                "MU",
+                "--offline",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    assert result["status"] == "failed"
+    assert index["batch_status"] == "planned"
+    assert index["monitor_status"] == "failed"
+    assert any(path.endswith("batch_manifest.json") for path in index["files_created"])
+    assert "MONITOR_FAILED" in index["warning_codes"]
+    assert "PIPELINE_FAILED_CLOSED" in index["warning_codes"]
+    assert cli_result.returncode == 2
+    assert "AI infra pipeline failed closed" in cli_result.stderr
+    assert "AI_INFRA_PIPELINE_INDEX.json" in cli_result.stderr
+
+
+def test_failure_index_boundary_fields_remain_true() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir = root / "evidence"
+        evidence_dir.mkdir()
+        monitor_dir = root / "monitor"
+        run_pipeline(
+            evidence_dir=evidence_dir,
+            monitor_out_dir=monitor_dir,
+            companies=["MU"],
+            offline=True,
+        )
+        index = json.loads((monitor_dir / PIPELINE_INDEX_FILENAME).read_text(encoding="utf-8"))
+
+    assert index["no_live_sec_fetch"] is True
+    assert index["no_web_search"] is True
+    assert index["no_llm"] is True
+    assert index["no_yfinance"] is True
+    assert index["no_portfolio_data"] is True
+    assert index["no_broker_data"] is True
+    assert index["no_client_data"] is True
+    assert index["no_pm_recommendation_wiring"] is True
 
 
 def test_batch_dry_run_does_not_create_evidence_db() -> None:

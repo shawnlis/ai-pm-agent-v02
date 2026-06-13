@@ -22,6 +22,8 @@ from .report_index import PIPELINE_INDEX_FILENAME, write_pipeline_index
 DEFAULT_PIPELINE_BATCH_DIR = DEFAULT_BATCH_OUTPUT_DIR
 WARNING_MONITOR_NOT_RUN = "MONITOR_NOT_RUN"
 WARNING_BATCH_NOT_RUN = "BATCH_NOT_RUN"
+MONITOR_FAILED = "MONITOR_FAILED"
+PIPELINE_FAILED_CLOSED = "PIPELINE_FAILED_CLOSED"
 
 
 class PipelineConfigError(ValueError):
@@ -79,15 +81,29 @@ def run_pipeline(
         warning_codes.append(WARNING_BATCH_NOT_RUN)
 
     if should_run_monitor:
-        monitor_result = run_monitor(
-            evidence_dir=evidence_path,
-            out_dir=monitor_dir,
-            tickers=selected_companies,
-            as_of_date=as_of_date,
-        )
-        monitor_status = "completed"
-        files_created.extend(_output_paths(monitor_result.get("outputs")))
-        warning_codes.extend(monitor_result.get("warning_codes", []))
+        try:
+            monitor_result = run_monitor(
+                evidence_dir=evidence_path,
+                out_dir=monitor_dir,
+                tickers=selected_companies,
+                as_of_date=as_of_date,
+            )
+            monitor_status = "completed"
+            files_created.extend(_output_paths(monitor_result.get("outputs")))
+            warning_codes.extend(monitor_result.get("warning_codes", []))
+        except Exception as exc:  # noqa: BLE001 - fail closed and preserve the pipeline audit index.
+            warning_codes.extend([MONITOR_FAILED, PIPELINE_FAILED_CLOSED])
+            return _failed_result(
+                run_id=run_id,
+                companies=selected_companies,
+                evidence_path=evidence_path,
+                batch_dir=batch_dir if run_batch_dry_run else None,
+                monitor_dir=monitor_dir,
+                batch_status=batch_status,
+                files_created=files_created,
+                warning_codes=warning_codes,
+                error_message=str(exc),
+            )
     else:
         warning_codes.append(WARNING_MONITOR_NOT_RUN)
 
@@ -148,6 +164,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(json.dumps({"status": result["status"], "run_id": result["run_id"], "outputs": result["outputs"]}, indent=2, sort_keys=True))
+    if result["status"] == "failed":
+        print(f"AI infra pipeline failed closed; index: {result['outputs']['pipeline_index']}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -155,6 +174,41 @@ def _output_paths(outputs: Any) -> list[str]:
     if not isinstance(outputs, dict):
         return []
     return [str(path) for path in outputs.values() if path]
+
+
+def _failed_result(
+    *,
+    run_id: str,
+    companies: list[str],
+    evidence_path: Path | None,
+    batch_dir: Path | None,
+    monitor_dir: Path,
+    batch_status: str,
+    files_created: list[str],
+    warning_codes: list[str],
+    error_message: str,
+) -> dict[str, Any]:
+    index = write_pipeline_index(
+        output_dir=monitor_dir,
+        run_id=run_id,
+        companies=companies,
+        evidence_input_dir=evidence_path,
+        batch_output_dir=batch_dir,
+        monitor_output_dir=monitor_dir,
+        batch_status=batch_status,
+        monitor_status="failed",
+        files_created=files_created,
+        warning_codes=warning_codes,
+        error_message=error_message,
+    )
+    return {
+        "status": "failed",
+        "run_id": run_id,
+        "index": index,
+        "outputs": {"pipeline_index": str(monitor_dir / PIPELINE_INDEX_FILENAME)},
+        "batch": None,
+        "monitor": None,
+    }
 
 
 def _pipeline_status(*, batch_status: str, monitor_status: str, run_monitor_step: bool) -> str:

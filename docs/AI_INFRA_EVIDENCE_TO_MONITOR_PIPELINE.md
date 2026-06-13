@@ -74,6 +74,12 @@ The batch runner produces Evidence DB export contracts. The monitor reads those 
 
 The pipeline does not pass evidence into PM prompts and does not produce buy, sell, hold, sizing, or rebalance instructions.
 
+## Fail-Closed Behavior
+
+If monitor input validation fails after pipeline execution starts, the pipeline writes `AI_INFRA_PIPELINE_INDEX.json` with `monitor_status` set to `failed`, warning codes `MONITOR_FAILED` and `PIPELINE_FAILED_CLOSED`, any files already created, and the standard safety boundary fields.
+
+Missing evidence is not fabricated. A failure index is an audit artifact for review and recovery; it is not a recommendation.
+
 ## Examples
 
 Run the monitor from existing evidence:
