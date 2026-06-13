@@ -1,0 +1,7 @@
+option_id,underlying_ticker,expiry_date,strike,contracts,contract_multiplier,premium_collected,current_underlying_price,currency,underlying_theme,notes
+NVDA_20260717_100P,NVDA,2026-07-17,100,1,100,350,125,USD,AI infrastructure,healthy cushion fixture
+AMD_20260620_160P,AMD,2026-06-20,160,2,100,1000,162,USD,semiconductor,near strike fixture
+MU_20260601_120P,MU,2026-06-01,120,1,100,400,118,USD,semiconductor,expired below strike fixture
+AVGO_20260717_900P,AVGO,2026-07-17,900,2,100,3000,850,USD,semiconductor,large assignment below breakeven fixture
+MSFT_MISSING_EXPIRY_400P,MSFT,,400,1,100,800,420,USD,mega-cap tech,missing expiry fixture
+GOOGL_MISSING_PRICE_150P,GOOGL,2026-08-21,150,1,100,500,,USD,mega-cap tech,missing price fixture
