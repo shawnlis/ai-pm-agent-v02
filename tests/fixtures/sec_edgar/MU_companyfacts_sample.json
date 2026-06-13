@@ -1,0 +1,122 @@
+{
+  "fixture_note": "Fake sanitized SEC companyfacts-shaped fixture for offline tests only.",
+  "cik": 723125,
+  "entityName": "Micron Technology",
+  "facts": {
+    "us-gaap": {
+      "Revenues": {
+        "label": "Revenue",
+        "description": "Amount of revenue recognized from goods and services.",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-08-31",
+              "val": 37100000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            },
+            {
+              "end": "2025-05-31",
+              "val": 9300000000,
+              "accn": "0000723125-25-000050",
+              "fy": 2025,
+              "fp": "Q3",
+              "form": "10-Q",
+              "filed": "2025-07-02",
+              "frame": "CY2025Q2"
+            }
+          ]
+        }
+      },
+      "NetIncomeLoss": {
+        "label": "Net Income Loss",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-08-31",
+              "val": 5100000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "Assets": {
+        "label": "Assets",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-08-31",
+              "val": 78000000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "Liabilities": {
+        "label": "Liabilities",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-08-31",
+              "val": 24000000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "CashAndCashEquivalentsAtCarryingValue": {
+        "label": "Cash and Cash Equivalents",
+        "units": {
+          "USD": [
+            {
+              "end": "2025-08-31",
+              "val": 8600000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      },
+      "CommonStocksIncludingAdditionalPaidInCapitalMember": {
+        "label": "Common Stocks Including Additional Paid In Capital Member",
+        "units": {
+          "shares": [
+            {
+              "end": "2025-08-31",
+              "val": 1110000000,
+              "accn": "0000723125-25-000090",
+              "fy": 2025,
+              "fp": "FY",
+              "form": "10-K",
+              "filed": "2025-10-08",
+              "frame": "CY2025"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "fixture_note": "Fake sanitized SEC submissions-shaped fixture for offline tests only.",
+  "cik": "723125",
+  "entityType": "operating",
+  "sic": "3674",
+  "name": "Micron Technology",
+  "tickers": ["MU"],
+  "exchanges": ["Nasdaq"],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0000723125-26-000010",
+        "0000723125-25-000090",
+        "0000723125-25-000050"
+      ],
+      "filingDate": [
+        "2026-01-09",
+        "2025-10-08",
+        "2025-07-02"
+      ],
+      "reportDate": [
+        "2025-12-31",
+        "2025-08-31",
+        "2025-05-31"
+      ],
+      "form": [
+        "10-Q",
+        "10-K",
+        "10-Q"
+      ],
+      "primaryDocument": [
+        "mu-20251231.htm",
+        "mu-20250831.htm",
+        "mu-20250531.htm"
+      ]
+    }
+  }
+}
