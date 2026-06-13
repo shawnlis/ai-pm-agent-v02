@@ -147,16 +147,17 @@ def _positions_table(rows: list[dict[str, Any]]) -> str:
 
 def _stress_table(rows: list[dict[str, Any]]) -> str:
     lines = [
-        "| Option | Scenario | Stress Price | Simple Downside | Review | Warnings |",
-        "| --- | --- | ---: | ---: | --- | --- |",
+        "| Option | Scenario | Stress Price | Downside After Premium | Estimated P/L After Premium | Review | Warnings |",
+        "| --- | --- | ---: | ---: | ---: | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {option_id} | {scenario} | {stress_price} | {downside} | {review} | {warnings} |".format(
+            "| {option_id} | {scenario} | {stress_price} | {downside} | {pnl} | {review} | {warnings} |".format(
                 option_id=row["option_id"],
                 scenario=row["scenario"],
                 stress_price="" if row["stress_price"] == "" else _money(float(row["stress_price"])),
                 downside=_money(float(row["max_simple_downside_at_stress"])),
+                pnl=_money(float(row["estimated_pnl_at_stress"])),
                 review=row["review_status"],
                 warnings=row["warning_codes"],
             )

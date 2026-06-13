@@ -50,6 +50,7 @@ SHORT_PUT_STRESS_FIELDS = [
     "intrinsic_loss_at_stress",
     "premium_collected",
     "max_simple_downside_at_stress",
+    "estimated_pnl_at_stress",
     "review_status",
     "warning_codes",
 ]

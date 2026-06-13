@@ -60,6 +60,49 @@ def test_missing_required_fields_fail_closed() -> None:
             load_short_puts_from_csv(path)
 
 
+def test_portfolio_csv_path_fails_closed_before_reading() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "portfolio.csv"
+
+        with pytest.raises(ShortPutRiskMonitorError) as exc_info:
+            load_short_puts_from_csv(path)
+
+    message = str(exc_info.value)
+    assert "DISALLOWED_REAL_SHORT_PUT_INPUT" in message
+    assert "fixture CSV input only" in message
+    assert "not found" not in message
+
+
+def test_ibkr_positions_path_fails_closed_before_reading() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "IBKR Positions" / "short_puts.csv"
+
+        with pytest.raises(ShortPutRiskMonitorError) as exc_info:
+            load_short_puts_from_csv(path)
+
+    message = str(exc_info.value)
+    assert "DISALLOWED_REAL_SHORT_PUT_INPUT" in message
+    assert "fixture CSV input only" in message
+    assert "not found" not in message
+
+
+def test_ibkr_broker_or_client_path_text_fails_closed() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        disallowed_paths = [
+            root / "ibkr_short_puts.csv",
+            root / "broker_short_puts.csv",
+            root / "client_short_puts.csv",
+        ]
+
+        for path in disallowed_paths:
+            with pytest.raises(ShortPutRiskMonitorError) as exc_info:
+                load_short_puts_from_csv(path)
+            message = str(exc_info.value)
+            assert "DISALLOWED_REAL_SHORT_PUT_INPUT" in message
+            assert "not found" not in message
+
+
 def test_invalid_numeric_values_fail_closed() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         path = _write_rows(Path(tmp), [{"strike": "not-a-number"}])
@@ -108,6 +151,57 @@ def test_stress_scenario_outputs_are_generated() -> None:
         "underlying to breakeven",
     }
     assert rows[0].keys() == set(SHORT_PUT_STRESS_FIELDS)
+
+
+def test_stress_downside_is_never_negative() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_monitor(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        rows = list(csv.DictReader((tmp_path / STRESS_FILENAME).open(newline="", encoding="utf-8")))
+
+    assert all(float(row["max_simple_downside_at_stress"]) >= 0 for row in rows)
+
+
+def test_stress_positive_pnl_still_has_zero_downside() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_monitor(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        rows = list(csv.DictReader((tmp_path / STRESS_FILENAME).open(newline="", encoding="utf-8")))
+        row = next(
+            item
+            for item in rows
+            if item["option_id"] == "NVDA_20260717_100P" and item["scenario"] == "underlying -10%"
+        )
+
+    assert float(row["max_simple_downside_at_stress"]) == 0.0
+    assert float(row["estimated_pnl_at_stress"]) > 0
+
+
+def test_stress_negative_pnl_has_positive_downside() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_monitor(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        rows = list(csv.DictReader((tmp_path / STRESS_FILENAME).open(newline="", encoding="utf-8")))
+        row = next(
+            item
+            for item in rows
+            if item["option_id"] == "AVGO_20260717_900P" and item["scenario"] == "underlying -20%"
+        )
+
+    assert float(row["max_simple_downside_at_stress"]) > 0
+    assert float(row["estimated_pnl_at_stress"]) < 0
+
+
+def test_stress_csv_schema_includes_estimated_pnl() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_monitor(input_path=FIXTURE, out_dir=tmp_path, as_of_date="2026-06-13")
+        with (tmp_path / STRESS_FILENAME).open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = reader.fieldnames or []
+
+    assert fieldnames == SHORT_PUT_STRESS_FIELDS
+    assert "estimated_pnl_at_stress" in fieldnames
 
 
 def test_stress_rows_inherit_position_warning_codes() -> None:

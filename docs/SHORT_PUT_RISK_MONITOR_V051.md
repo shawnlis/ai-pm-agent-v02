@@ -69,6 +69,10 @@ Required files:
 ## Known Limitations
 
 - Stress scenarios are simple intrinsic-value downside checks, not option pricing models.
+- `max_simple_downside_at_stress` is floored at zero and should be read as downside after premium, not a full option-pricing model.
+- `estimated_pnl_at_stress` is a simple intrinsic-value approximation after premium, not a trade recommendation.
+- Positive stress P/L does not mean sell more, hold, roll, or avoid closing.
+- Stress output is not payoff, margin, greek, assignment-probability, or advice modeling.
 - No greeks, volatility, borrow, early exercise, assignment probability, margin, tax, liquidity, or slippage model is included.
 - Missing underlying prices prevent price-derived distance and percentage-down stress calculations.
 - All prices, strikes, contracts, multipliers, premiums, themes, and currencies are fixture inputs.

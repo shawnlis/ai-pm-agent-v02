@@ -55,7 +55,8 @@ def _stress_row(
         warning_codes.append(MISSING_UNDERLYING_PRICE)
     warning_codes = _normalized_warning_codes(warning_codes)
     intrinsic_loss = 0.0 if stress_price is None else max(position.strike - stress_price, 0.0) * position.underlying_units
-    simple_downside = intrinsic_loss - position.premium_collected
+    estimated_pnl = position.premium_collected - intrinsic_loss
+    simple_downside = max(intrinsic_loss - position.premium_collected, 0.0)
     return {
         "option_id": position.option_id,
         "underlying_ticker": position.underlying_ticker,
@@ -67,6 +68,7 @@ def _stress_row(
         "intrinsic_loss_at_stress": round(intrinsic_loss, 6),
         "premium_collected": round(position.premium_collected, 6),
         "max_simple_downside_at_stress": round(simple_downside, 6),
+        "estimated_pnl_at_stress": round(estimated_pnl, 6),
         "review_status": REVIEW_NEEDS_REVIEW if warning_codes else REVIEW_OK,
         "warning_codes": ";".join(warning_codes),
     }
