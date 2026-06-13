@@ -21,22 +21,51 @@ Output contracts:
 - `ingestion_warnings.md`
 - `SEC_IR_EVIDENCE_DB_FIXTURE_MVP_REPORT.md`
 
-## Future Level 1 EDGAR Plan
+## Level 1 SEC EDGAR Live Fetch Mode
 
-Future implementation can add public read-only SEC EDGAR `data.sec.gov` sources after review. That should remain Level 1: no credentials, no account access, no broker access, no trading, no portfolio-aware recommendation path.
+Level 1 live fetch mode is available only when explicitly requested with `--live-sec-fetch`. Fixture mode remains the default.
 
-Planned first live endpoints:
+Live mode uses public, no-secret, read-only SEC JSON endpoints only:
 
+- `https://www.sec.gov/files/company_tickers.json`
 - `https://data.sec.gov/submissions/CIK##########.json`
 - `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`
 
-Live implementation must add a user-agent placeholder, polite rate limiting, local cache controls, fail-closed retry behavior, and fixture parity tests before use.
+Required live-mode flags:
+
+- `--live-sec-fetch`
+- `--sec-user-agent "<Name email@example.com>"`
+
+Optional live-mode flags:
+
+- `--cik <CIK>` to avoid ticker-resolution fetch.
+- `--sec-cache-dir <path>` to override the default cache directory.
+- `--force-refresh` to bypass valid cache files.
+
+`--offline` blocks live network access. Live mode cannot be combined with fixture files; run either fixture mode or live mode.
+
+Default live cache path:
+
+`reports/sec_ir_evidence_db/sec_cache/`
+
+Cache files:
+
+- `company_tickers.json`
+- `submissions_CIK.json`
+- `companyfacts_CIK.json`
+- matching `*.meta.json` metadata sidecars
+
+Cache metadata records source URL, retrieval time, SHA-256 hash, API level, source type, HTTP status, and a User-Agent hash. It does not store secrets or credentials.
+
+Live mode fails closed. HTTP errors, invalid JSON, missing User-Agent, and CIK resolution failures emit structured warnings and do not fabricate evidence or metrics. The adapter uses cache-first behavior and does not retry aggressively.
 
 ## Source Confidence Rules
 
 - Local SEC-shaped fixtures are tagged `high_fixture_official_shape`.
 - Fixture confidence means the file follows an official endpoint shape; it does not mean live data was fetched.
+- Public SEC EDGAR live sources are tagged `high_official_sec_edgar_public_api`.
 - Every exported source captures path, SHA-256 hash, source date, capture date, confidence, and `fixture_only`.
+- Live source manifests also capture source URL, cache path, retrieval timestamp, cache hit/miss, Level 1 API flags, and warning codes.
 - Missing or unsupported fields must produce structured warnings instead of silent conclusions.
 
 ## Boundaries
@@ -45,5 +74,6 @@ Live implementation must add a user-agent placeholder, polite rate limiting, loc
 - No position sizing or portfolio-aware PM recommendations.
 - No direct PM prompt wiring.
 - No portfolio, IBKR, broker, account, client, API-key, token, `.env`, or `Openrouter.txt` data.
+- No live source is allowed unless `--live-sec-fetch` and `--sec-user-agent` are both supplied.
 - Evidence can feed source ledgers and gap monitors.
 - Evidence can enter PM workflows only through a separate reviewed evidence-pack interface.
