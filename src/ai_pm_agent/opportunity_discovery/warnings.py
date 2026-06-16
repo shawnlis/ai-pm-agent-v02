@@ -1,0 +1,15 @@
+"""Warning codes for AI infrastructure opportunity discovery."""
+
+MISSING_REQUIRED_INPUT = "MISSING_REQUIRED_INPUT"
+WEAK_SOURCE_COVERAGE = "WEAK_SOURCE_COVERAGE"
+MISSING_SOURCE_DATE = "MISSING_SOURCE_DATE"
+STALE_EVIDENCE = "STALE_EVIDENCE"
+MISSING_VALUATION_DATA = "MISSING_VALUATION_DATA"
+RISK_WARNING_PRESENT = "RISK_WARNING_PRESENT"
+MISSING_THESIS_GAP_DATA = "MISSING_THESIS_GAP_DATA"
+NO_IMPROVING_GAPS = "NO_IMPROVING_GAPS"
+DISCOVERY_FAILED_CLOSED = "DISCOVERY_FAILED_CLOSED"
+
+
+def unique_codes(codes: list[str] | tuple[str, ...] | set[str]) -> tuple[str, ...]:
+    return tuple(sorted({str(code) for code in codes if str(code)}))
