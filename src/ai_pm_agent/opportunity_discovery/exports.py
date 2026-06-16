@@ -15,6 +15,8 @@ CANDIDATES_FILENAME = "opportunity_candidates.csv"
 SCORECARD_FILENAME = "opportunity_scorecard.json"
 WARNINGS_FILENAME = "opportunity_warnings.md"
 MANIFEST_FILENAME = "opportunity_discovery_manifest.json"
+DELTA_SUMMARY_FILENAME = "opportunity_delta_summary.csv"
+TRANSITION_REPORT_FILENAME = "opportunity_transition_report.md"
 
 CANDIDATE_FIELDS = [
     "company",
@@ -29,14 +31,39 @@ CANDIDATE_FIELDS = [
     "risk_blocker_penalty",
     "missing_data_penalty",
     "improving_gap_count",
-    "closed_gap_count",
-    "partially_closed_gap_count",
+    "fully_resolved_gap_count",
+    "partially_resolved_gap_count",
     "source_count",
     "newest_source_date",
     "valuation_data_available",
     "source_coverage_status",
+    "prior_status",
+    "current_status",
+    "status_change",
+    "score_delta",
+    "newly_promoted",
+    "newly_downgraded",
+    "unchanged",
+    "why_this_status",
+    "what_would_upgrade",
+    "what_would_downgrade",
+    "unresolved_blockers",
+    "required_next_evidence",
+    "not_investment_advice",
     "warning_codes",
     "review_note",
+]
+
+DELTA_FIELDS = [
+    "company",
+    "company_name",
+    "prior_status",
+    "current_status",
+    "status_change",
+    "score_delta",
+    "newly_promoted",
+    "newly_downgraded",
+    "unchanged",
 ]
 
 
@@ -53,12 +80,16 @@ def write_outputs(result: DiscoveryResult, out_dir: Path | str | None = None) ->
     scorecard_json = target / SCORECARD_FILENAME
     warnings_md = target / WARNINGS_FILENAME
     manifest_json = target / MANIFEST_FILENAME
+    delta_csv = target / DELTA_SUMMARY_FILENAME
+    transition_md = target / TRANSITION_REPORT_FILENAME
 
     _write_csv(candidates_csv, CANDIDATE_FIELDS, [candidate.as_row() for candidate in result.candidates])
+    _write_csv(delta_csv, DELTA_FIELDS, [_delta_row(candidate.as_row()) for candidate in result.candidates])
     scorecard_json.write_text(json.dumps(_scorecard_payload(result, target), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     warnings_md.write_text(_warnings_markdown(result), encoding="utf-8")
     manifest_json.write_text(json.dumps(_manifest_payload(result, target), indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report_md.write_text(_report_markdown(result), encoding="utf-8")
+    transition_md.write_text(_transition_markdown(result), encoding="utf-8")
 
     return {
         "review_queue": str(report_md),
@@ -66,6 +97,8 @@ def write_outputs(result: DiscoveryResult, out_dir: Path | str | None = None) ->
         "opportunity_scorecard": str(scorecard_json),
         "opportunity_warnings": str(warnings_md),
         "opportunity_discovery_manifest": str(manifest_json),
+        "opportunity_delta_summary": str(delta_csv),
+        "opportunity_transition_report": str(transition_md),
     }
 
 
@@ -106,7 +139,12 @@ def _manifest_payload(result: DiscoveryResult, out_dir: Path) -> dict[str, Any]:
             "source_coverage": str(paths.source_coverage_csv),
             "monitor_warnings": str(paths.monitor_warnings_md),
             "prior_monitor_dir": str(paths.prior_monitor_dir or ""),
+            "prior_scorecard": str(paths.prior_scorecard_json or ""),
+            "prior_candidates": str(paths.prior_candidates_csv or ""),
+            "risk_summary": str(paths.risk_summary_path or ""),
         },
+        "prior_run_used": bool(paths.prior_scorecard_json or paths.prior_candidates_csv),
+        "risk_summary_used": bool(paths.risk_summary_path),
         "safety": SAFETY_FLAGS,
         "status_counts": result.status_counts,
         "files_created": [
@@ -115,6 +153,8 @@ def _manifest_payload(result: DiscoveryResult, out_dir: Path) -> dict[str, Any]:
             str(out_dir / SCORECARD_FILENAME),
             str(out_dir / WARNINGS_FILENAME),
             str(out_dir / MANIFEST_FILENAME),
+            str(out_dir / DELTA_SUMMARY_FILENAME),
+            str(out_dir / TRANSITION_REPORT_FILENAME),
         ],
     }
 
@@ -154,12 +194,60 @@ def _report_markdown(result: DiscoveryResult) -> str:
     lines.extend(
         [
             "",
+            "## Status Explanations",
+            "",
+            "| Company | Status | Why | Upgrade Condition | Downgrade Trigger |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    for candidate in result.candidates:
+        lines.append(
+            "| {company} | {status} | {why} | {upgrade} | {downgrade} |".format(
+                company=candidate.company,
+                status=candidate.status,
+                why=candidate.why_this_status,
+                upgrade=candidate.what_would_upgrade,
+                downgrade=candidate.what_would_downgrade,
+            )
+        )
+    lines.extend(
+        [
+            "",
             "## Method",
             "",
             "- Scores use existing local evidence and thesis-gap artifacts only.",
             "- Strong evidence with missing valuation data is classified as thesis-improving or valuation-blocked.",
             "- Weak, stale, or undated source coverage blocks review-candidate status.",
             "- Risk warnings block or penalize the queue status.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _transition_markdown(result: DiscoveryResult) -> str:
+    lines = [
+        "# AI Infrastructure Opportunity Transition Report",
+        "",
+        "This transition report compares the current deterministic review queue with the optional prior local run.",
+        "",
+        "| Company | Prior Status | Current Status | Status Change | Score Delta |",
+        "|---|---|---|---|---:|",
+    ]
+    for candidate in result.candidates:
+        lines.append(
+            "| {company} | {prior} | {current} | {change} | {delta} |".format(
+                company=candidate.company,
+                prior=candidate.prior_status or "NO_PRIOR",
+                current=candidate.current_status or candidate.status,
+                change=candidate.status_change,
+                delta=candidate.score_delta,
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "Boundary: this is not investment advice and does not create action instructions.",
             "",
         ]
     )
@@ -191,3 +279,7 @@ def _warnings_markdown(result: DiscoveryResult) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _delta_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {field: row.get(field, "") for field in DELTA_FIELDS}

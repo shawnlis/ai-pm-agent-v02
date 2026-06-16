@@ -1,4 +1,4 @@
-"""Models for AI infrastructure opportunity discovery v0.1."""
+"""Models for AI infrastructure opportunity discovery."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "v0.1"
+SCHEMA_VERSION = "v0.6.1"
 
 STATUSES = [
     "OPPORTUNITY_REVIEW",
@@ -31,7 +31,7 @@ SAFETY_FLAGS = {
     "broker_data_used": False,
     "client_data_used": False,
     "trading": False,
-    "order_placement": False,
+    "execution_requests": False,
     "network_access": False,
     "live_sec_fetch": False,
     "web_search": False,
@@ -60,6 +60,9 @@ class DiscoveryInputPaths:
     source_coverage_csv: Path
     monitor_warnings_md: Path
     prior_monitor_dir: Path | None = None
+    prior_scorecard_json: Path | None = None
+    prior_candidates_csv: Path | None = None
+    risk_summary_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,9 @@ class DiscoveryInputBundle:
     thesis_gap_summary: dict[str, Any]
     source_coverage_rows: list[dict[str, str]]
     monitor_warnings_text: str
+    prior_candidate_rows: list[dict[str, str]] = field(default_factory=list)
+    risk_summary_rows: list[dict[str, str]] = field(default_factory=list)
+    risk_summary_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -94,6 +100,19 @@ class OpportunityCandidate:
     newest_source_date: str
     valuation_data_available: bool
     source_coverage_status: str
+    prior_status: str = ""
+    current_status: str = ""
+    status_change: str = "NO_PRIOR"
+    score_delta: int = 0
+    newly_promoted: bool = False
+    newly_downgraded: bool = False
+    unchanged: bool = False
+    why_this_status: str = ""
+    what_would_upgrade: str = ""
+    what_would_downgrade: str = ""
+    unresolved_blockers: tuple[str, ...] = field(default_factory=tuple)
+    required_next_evidence: str = ""
+    not_investment_advice: bool = True
     warning_codes: tuple[str, ...] = field(default_factory=tuple)
     review_note: str = ""
 
@@ -111,12 +130,25 @@ class OpportunityCandidate:
             "risk_blocker_penalty": self.risk_blocker_penalty,
             "missing_data_penalty": self.missing_data_penalty,
             "improving_gap_count": self.improving_gap_count,
-            "closed_gap_count": self.closed_gap_count,
-            "partially_closed_gap_count": self.partially_closed_gap_count,
+            "fully_resolved_gap_count": self.closed_gap_count,
+            "partially_resolved_gap_count": self.partially_closed_gap_count,
             "source_count": self.source_count,
             "newest_source_date": self.newest_source_date,
             "valuation_data_available": str(self.valuation_data_available).lower(),
             "source_coverage_status": self.source_coverage_status,
+            "prior_status": self.prior_status,
+            "current_status": self.current_status or self.status,
+            "status_change": self.status_change,
+            "score_delta": self.score_delta,
+            "newly_promoted": str(self.newly_promoted).lower(),
+            "newly_downgraded": str(self.newly_downgraded).lower(),
+            "unchanged": str(self.unchanged).lower(),
+            "why_this_status": self.why_this_status,
+            "what_would_upgrade": self.what_would_upgrade,
+            "what_would_downgrade": self.what_would_downgrade,
+            "unresolved_blockers": ";".join(self.unresolved_blockers),
+            "required_next_evidence": self.required_next_evidence,
+            "not_investment_advice": str(self.not_investment_advice).lower(),
             "warning_codes": ";".join(self.warning_codes),
             "review_note": self.review_note,
         }

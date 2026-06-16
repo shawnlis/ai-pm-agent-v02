@@ -8,6 +8,7 @@ from typing import Iterable
 
 from .models import DiscoveryInputBundle, DiscoveryResult, OpportunityCandidate, STATUSES
 from .warnings import (
+    HIGH_RISK_BLOCKER_PRESENT,
     MISSING_SOURCE_DATE,
     MISSING_THESIS_GAP_DATA,
     MISSING_VALUATION_DATA,
@@ -22,6 +23,7 @@ from .warnings import (
 IMPROVING_STATUSES = {"CLOSED", "PARTIALLY_CLOSED"}
 WEAK_COVERAGE_STATUSES = {"NO_COMPANY_EVIDENCE", "NEEDS_REVIEW", "STALE", ""}
 RISK_CODES = {"RISK_EVIDENCE_PRESENT", "ROI_RISK", "PIPELINE_REVIEW_REQUIRED", "RISK_ARTIFACT_NEEDS_REVIEW"}
+HIGH_RISK_SEVERITIES = {"high", "critical", "blocker", "severe"}
 CATALYST_TERMS = (
     "commercial shipment",
     "material revenue",
@@ -57,6 +59,10 @@ def score_bundle(bundle: DiscoveryInputBundle, *, as_of_date: date | None = None
         _ticker(row): row for row in bundle.source_coverage_rows if _ticker(row)
     }
     evidence_rows_by_company = _group_by_company(bundle.ledger_rows + bundle.metric_rows)
+    prior_by_company = {
+        _ticker(row): row for row in bundle.prior_candidate_rows if _ticker(row)
+    }
+    high_risk_by_company = _high_risk_companies(bundle.risk_summary_rows, bundle.risk_summary_text)
 
     candidates = [
         _score_company(
@@ -64,6 +70,8 @@ def score_bundle(bundle: DiscoveryInputBundle, *, as_of_date: date | None = None
             gap_rows=gap_rows_by_company.get(company, []),
             coverage_row=coverage_by_company.get(company, {}),
             evidence_rows=evidence_rows_by_company.get(company, []),
+            prior_row=prior_by_company.get(company, {}),
+            high_risk_blocker=company in high_risk_by_company,
         )
         for company in companies
     ]
@@ -86,6 +94,8 @@ def _score_company(
     gap_rows: list[dict[str, str]],
     coverage_row: dict[str, str],
     evidence_rows: list[dict[str, str]],
+    prior_row: dict[str, str],
+    high_risk_blocker: bool,
 ) -> OpportunityCandidate:
     closed = sum(1 for row in gap_rows if row.get("current_status") == "CLOSED")
     partial = sum(1 for row in gap_rows if row.get("current_status") == "PARTIALLY_CLOSED")
@@ -107,6 +117,8 @@ def _score_company(
         warning_codes.add(STALE_EVIDENCE)
     if warning_codes & RISK_CODES:
         warning_codes.add(RISK_WARNING_PRESENT)
+    if high_risk_blocker:
+        warning_codes.update({RISK_WARNING_PRESENT, HIGH_RISK_BLOCKER_PRESENT})
 
     valuation_available = _has_valuation_data(evidence_rows)
     if not valuation_available:
@@ -117,7 +129,7 @@ def _score_company(
     gap_closure = min(25, closed * 12 + partial * 7)
     source_freshness = 15 if coverage_status == "COVERED" and newest_source_date else 0
     valuation_score = 15 if valuation_available else 0
-    risk_penalty = 25 if RISK_WARNING_PRESENT in warning_codes else 0
+    risk_penalty = 35 if HIGH_RISK_BLOCKER_PRESENT in warning_codes else 25 if RISK_WARNING_PRESENT in warning_codes else 0
     missing_penalty = 0
     if WEAK_SOURCE_COVERAGE in warning_codes:
         missing_penalty += 20
@@ -146,6 +158,14 @@ def _score_company(
         valuation_available=valuation_available,
         catalyst_score=catalyst_score,
         warning_codes=warning_codes,
+        positive_evidence_present=improving > 0 and (closed > 0 or partial > 0),
+    )
+    transition = _transition(prior_row, status, total)
+    unresolved_blockers = _unresolved_blockers(
+        warning_codes=warning_codes,
+        valuation_available=valuation_available,
+        coverage_status=coverage_status,
+        risk_penalty=risk_penalty,
     )
     return OpportunityCandidate(
         company=company,
@@ -166,6 +186,26 @@ def _score_company(
         newest_source_date=newest_source_date,
         valuation_data_available=valuation_available,
         source_coverage_status=coverage_status or "UNKNOWN",
+        prior_status=transition["prior_status"],
+        current_status=status,
+        status_change=transition["status_change"],
+        score_delta=transition["score_delta"],
+        newly_promoted=transition["newly_promoted"],
+        newly_downgraded=transition["newly_downgraded"],
+        unchanged=transition["unchanged"],
+        why_this_status=_why_this_status(
+            status=status,
+            improving=improving,
+            valuation_available=valuation_available,
+            coverage_status=coverage_status,
+            risk_penalty=risk_penalty,
+            warning_codes=warning_codes,
+        ),
+        what_would_upgrade=_what_would_upgrade(status, unresolved_blockers),
+        what_would_downgrade=_what_would_downgrade(status),
+        unresolved_blockers=unresolved_blockers,
+        required_next_evidence=_required_next_evidence(status, unresolved_blockers),
+        not_investment_advice=True,
         warning_codes=unique_codes(warning_codes),
         review_note=_review_note(status),
     )
@@ -179,6 +219,7 @@ def _status(
     valuation_available: bool,
     catalyst_score: int,
     warning_codes: set[str],
+    positive_evidence_present: bool,
 ) -> str:
     weak_or_stale = WEAK_SOURCE_COVERAGE in warning_codes or MISSING_SOURCE_DATE in warning_codes or STALE_EVIDENCE in warning_codes
     if RISK_WARNING_PRESENT in warning_codes:
@@ -193,7 +234,7 @@ def _status(
         return "THESIS_IMPROVING"
     if not valuation_available:
         return "VALUATION_BLOCKED"
-    if coverage_status == "COVERED" and total >= 70:
+    if coverage_status == "COVERED" and total >= 70 and positive_evidence_present:
         return "OPPORTUNITY_REVIEW"
     if catalyst_score > 0:
         return "CATALYST_MONITOR"
@@ -226,6 +267,29 @@ def _warning_codes_from_rows(rows: list[dict[str, str]]) -> list[str]:
     return codes
 
 
+def _high_risk_companies(rows: list[dict[str, str]], text: str) -> set[str]:
+    tickers: set[str] = set()
+    for row in rows:
+        ticker = _ticker(row)
+        row_text = _row_text(row).lower()
+        severity = str(row.get("severity") or row.get("risk_severity") or row.get("level") or "").strip().lower()
+        code = str(row.get("warning_code") or row.get("code") or row.get("warning_codes") or "").upper()
+        high = severity in HIGH_RISK_SEVERITIES or "HIGH" in code or "BLOCKER" in code
+        if ticker and high:
+            tickers.add(ticker)
+        if ticker and "high" in row_text and "risk" in row_text:
+            tickers.add(ticker)
+    for line in text.splitlines():
+        lowered = line.lower()
+        if "high" not in lowered and "blocker" not in lowered:
+            continue
+        for token in line.replace("|", " ").replace(",", " ").split():
+            cleaned = "".join(ch for ch in token if ch.isalnum()).upper()
+            if 1 < len(cleaned) <= 5:
+                tickers.add(cleaned)
+    return tickers
+
+
 def _has_valuation_data(rows: list[dict[str, str]]) -> bool:
     return any(any(term in _row_text(row).lower() for term in VALUATION_TERMS) for row in rows)
 
@@ -255,6 +319,125 @@ def _int_value(raw: object) -> int:
         return int(str(raw or "0"))
     except ValueError:
         return 0
+
+
+def _transition(prior_row: dict[str, str], current_status: str, current_score: int) -> dict[str, object]:
+    prior_status = str(prior_row.get("current_status") or prior_row.get("status") or "").strip()
+    prior_score = _int_value(prior_row.get("total_score"))
+    if not prior_status:
+        return {
+            "prior_status": "",
+            "status_change": "NO_PRIOR",
+            "score_delta": 0,
+            "newly_promoted": False,
+            "newly_downgraded": False,
+            "unchanged": False,
+        }
+    prior_rank = _status_rank(prior_status)
+    current_rank = _status_rank(current_status)
+    promoted = current_rank < prior_rank
+    downgraded = current_rank > prior_rank
+    unchanged = current_status == prior_status
+    if promoted:
+        status_change = "PROMOTED"
+    elif downgraded:
+        status_change = "DOWNGRADED"
+    else:
+        status_change = "UNCHANGED"
+    return {
+        "prior_status": prior_status,
+        "status_change": status_change,
+        "score_delta": current_score - prior_score,
+        "newly_promoted": promoted,
+        "newly_downgraded": downgraded,
+        "unchanged": unchanged,
+    }
+
+
+def _status_rank(status: str) -> int:
+    try:
+        return STATUSES.index(status)
+    except ValueError:
+        return len(STATUSES)
+
+
+def _unresolved_blockers(
+    *,
+    warning_codes: set[str],
+    valuation_available: bool,
+    coverage_status: str,
+    risk_penalty: int,
+) -> tuple[str, ...]:
+    blockers: list[str] = []
+    if not valuation_available:
+        blockers.append("missing valuation data")
+    if WEAK_SOURCE_COVERAGE in warning_codes:
+        blockers.append("weak source coverage")
+    if MISSING_SOURCE_DATE in warning_codes:
+        blockers.append("missing source dates")
+    if STALE_EVIDENCE in warning_codes or coverage_status == "STALE":
+        blockers.append("stale evidence")
+    if risk_penalty >= 35:
+        blockers.append("high risk blocker")
+    elif risk_penalty:
+        blockers.append("risk warning")
+    if NO_IMPROVING_GAPS in warning_codes:
+        blockers.append("no improving thesis-gap evidence")
+    return tuple(blockers)
+
+
+def _why_this_status(
+    *,
+    status: str,
+    improving: int,
+    valuation_available: bool,
+    coverage_status: str,
+    risk_penalty: int,
+    warning_codes: set[str],
+) -> str:
+    if status == "OPPORTUNITY_REVIEW":
+        return "Source coverage, valuation data, and positive thesis-gap evidence are present without risk blockers."
+    if status == "THESIS_IMPROVING":
+        return "Positive thesis-gap evidence improved, but the queue still requires valuation review before review-candidate status."
+    if status == "VALUATION_BLOCKED":
+        return "Positive evidence exists, but valuation data is missing."
+    if status == "RISK_BLOCKED":
+        return "Risk warnings block review-candidate status."
+    if status == "EVIDENCE_BLOCKED":
+        return "Evidence coverage is missing, stale, weak, or undated."
+    if status == "CATALYST_MONITOR":
+        return "Catalyst evidence is visible but review-candidate gates are incomplete."
+    if improving == 0 or NO_IMPROVING_GAPS in warning_codes:
+        return "No positive thesis-gap evidence is strong enough for a review-candidate status."
+    if coverage_status != "COVERED":
+        return "Source coverage is not strong enough for review-candidate status."
+    if not valuation_available:
+        return "Valuation data is missing."
+    if risk_penalty:
+        return "Risk warnings require review before candidate escalation."
+    return "Research queue status assigned by deterministic rules."
+
+
+def _what_would_upgrade(status: str, blockers: tuple[str, ...]) -> str:
+    if status == "OPPORTUNITY_REVIEW":
+        return "Maintain source coverage, valuation data, positive thesis evidence, and clear risk checks across the next run."
+    if not blockers:
+        return "Provide stronger dated source evidence and valuation context in a future reviewed artifact."
+    return "Resolve blockers: " + "; ".join(blockers) + "."
+
+
+def _what_would_downgrade(status: str) -> str:
+    if status == "OPPORTUNITY_REVIEW":
+        return "Missing valuation data, weak or stale source coverage, loss of positive thesis evidence, or new high-risk warnings would downgrade this status."
+    return "New high-risk warnings, stale evidence, or weaker thesis-gap evidence would keep or move this lower in the review queue."
+
+
+def _required_next_evidence(status: str, blockers: tuple[str, ...]) -> str:
+    if status == "OPPORTUNITY_REVIEW":
+        return "Next run should confirm dated source coverage, valuation data, and absence of high-risk blockers."
+    if blockers:
+        return "Evidence needed: " + "; ".join(blockers) + "."
+    return "Evidence needed: dated source-backed thesis-gap evidence plus valuation context."
 
 
 def _company_name(company: str, coverage_row: dict[str, str], evidence_rows: list[dict[str, str]]) -> str:

@@ -98,9 +98,18 @@ FORBIDDEN_OUTPUT_TERMS = [
     "hold",
     "accumulate",
     "trim",
+    "add",
+    "reduce",
     "short",
     "long",
-    "target position",
+    "target price",
+    "position size",
+    "rebalance",
+    "order",
+    "trade",
+    "roll",
+    "close",
+    "open position",
 ]
 
 
@@ -117,6 +126,8 @@ def test_loads_fixture_inputs_and_writes_outputs() -> None:
         assert (out_dir / "opportunity_scorecard.json").exists()
         assert (out_dir / "opportunity_warnings.md").exists()
         assert (out_dir / "opportunity_discovery_manifest.json").exists()
+        assert (out_dir / "opportunity_delta_summary.csv").exists()
+        assert (out_dir / "opportunity_transition_report.md").exists()
 
 
 def test_strong_evidence_missing_valuation_is_thesis_improving_not_opportunity_review() -> None:
@@ -173,12 +184,90 @@ def test_forbidden_recommendation_words_do_not_appear_in_generated_outputs() -> 
                 out_dir / "opportunity_scorecard.json",
                 out_dir / "opportunity_warnings.md",
                 out_dir / "opportunity_discovery_manifest.json",
+                out_dir / "opportunity_delta_summary.csv",
+                out_dir / "opportunity_transition_report.md",
             ]
         )
 
     for term in FORBIDDEN_OUTPUT_TERMS:
         assert term not in combined
     assert "not investment advice" in combined
+
+
+def test_prior_run_promotion_and_downgrade_detection() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir, monitor_dir = _write_fixture_bundle(root)
+        prior_csv = root / "prior_candidates.csv"
+        _write_csv(
+            prior_csv,
+            ["company", "status", "total_score"],
+            [
+                {"company": "NVDA", "status": "THESIS_IMPROVING", "total_score": "70"},
+                {"company": "AMD", "status": "OPPORTUNITY_REVIEW", "total_score": "80"},
+            ],
+        )
+        out_dir = root / "out"
+        run_discovery(
+            evidence_dir=evidence_dir,
+            monitor_dir=monitor_dir,
+            prior_candidates_csv=prior_csv,
+            out_dir=out_dir,
+        )
+        delta_rows = _read_csv(out_dir / "opportunity_delta_summary.csv")
+        scorecard = json.loads((out_dir / "opportunity_scorecard.json").read_text(encoding="utf-8"))
+
+    by_company = {row["company"]: row for row in delta_rows}
+    assert by_company["NVDA"]["status_change"] == "PROMOTED"
+    assert by_company["NVDA"]["newly_promoted"] == "true"
+    assert by_company["AMD"]["status_change"] == "DOWNGRADED"
+    assert by_company["AMD"]["newly_downgraded"] == "true"
+    assert any(candidate["status_change"] == "PROMOTED" for candidate in scorecard["candidates"])
+
+
+def test_high_risk_summary_sets_risk_blocked() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir, monitor_dir = _write_fixture_bundle(root)
+        risk_csv = root / "risk_warning_summary.csv"
+        _write_csv(
+            risk_csv,
+            ["ticker", "severity", "warning_code", "message"],
+            [{"ticker": "NVDA", "severity": "high", "warning_code": "HIGH_RISK_BLOCKER", "message": "fixture risk"}],
+        )
+        out_dir = root / "out"
+        run_discovery(evidence_dir=evidence_dir, monitor_dir=monitor_dir, risk_summary_path=risk_csv, out_dir=out_dir)
+        rows = _read_csv(out_dir / "opportunity_candidates.csv")
+
+    by_company = {row["company"]: row for row in rows}
+    assert by_company["NVDA"]["status"] == "RISK_BLOCKED"
+    assert "HIGH_RISK_BLOCKER_PRESENT" in by_company["NVDA"]["warning_codes"]
+
+
+def test_opportunity_review_contains_required_explanation_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir, monitor_dir = _write_fixture_bundle(root)
+        out_dir = root / "out"
+        run_discovery(evidence_dir=evidence_dir, monitor_dir=monitor_dir, out_dir=out_dir)
+        rows = _read_csv(out_dir / "opportunity_candidates.csv")
+
+    nvda = {row["company"]: row for row in rows}["NVDA"]
+    assert nvda["status"] == "OPPORTUNITY_REVIEW"
+    for field in [
+        "why_this_status",
+        "what_would_upgrade",
+        "what_would_downgrade",
+        "unresolved_blockers",
+        "required_next_evidence",
+        "not_investment_advice",
+    ]:
+        assert field in nvda
+    assert nvda["why_this_status"]
+    assert nvda["what_would_upgrade"]
+    assert nvda["what_would_downgrade"]
+    assert nvda["required_next_evidence"]
+    assert nvda["not_investment_advice"] == "true"
 
 
 def test_manifest_records_inputs_and_safety_flags() -> None:
@@ -191,6 +280,8 @@ def test_manifest_records_inputs_and_safety_flags() -> None:
 
     assert manifest["input_paths"]["evidence_dir"] == str(evidence_dir)
     assert manifest["input_paths"]["monitor_dir"] == str(monitor_dir)
+    assert manifest["prior_run_used"] is False
+    assert manifest["risk_summary_used"] is False
     assert manifest["safety"]["pm_prompt_wiring"] is False
     assert manifest["safety"]["portfolio_data_used"] is False
     assert manifest["safety"]["broker_data_used"] is False
@@ -213,6 +304,30 @@ def test_missing_required_inputs_fail_closed() -> None:
             assert "Missing required opportunity discovery inputs" in str(exc)
         else:
             raise AssertionError("missing inputs should fail closed")
+
+
+def test_disallowed_portfolio_ibkr_broker_client_paths_fail_closed() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_dir, monitor_dir = _write_fixture_bundle(root)
+        unsafe_paths = [
+            root / "portfolio.csv",
+            root / "IBKR Positions" / "risk_warning_summary.csv",
+            root / "broker_warning_summary.csv",
+            root / "client_warning_summary.csv",
+        ]
+        for unsafe_path in unsafe_paths:
+            try:
+                run_discovery(
+                    evidence_dir=evidence_dir,
+                    monitor_dir=monitor_dir,
+                    risk_summary_path=unsafe_path,
+                    out_dir=root / f"out_{unsafe_path.name}",
+                )
+            except MissingOpportunityInputError as exc:
+                assert "Unsafe optional opportunity discovery path rejected" in str(exc)
+            else:
+                raise AssertionError(f"unsafe path should fail closed: {unsafe_path}")
 
 
 def test_deterministic_ordering() -> None:
@@ -301,8 +416,6 @@ def test_no_pm_prompt_wiring_or_forbidden_imports() -> None:
     }
     assert forbidden_imports.isdisjoint(imported_modules)
     for marker in [
-        "portfolio.csv",
-        "IBKR Positions",
         "build_pm_prompt",
         "run_company_research",
         "call_llm",

@@ -1,8 +1,8 @@
-# AI Infrastructure Opportunity Discovery v0.1
+# AI Infrastructure Opportunity Discovery
 
 ## Purpose
 
-AI Infrastructure Opportunity Discovery v0.1 creates a deterministic review queue from existing local SEC / IR Evidence Database exports and AI Infrastructure Thesis-Gap Monitor outputs.
+AI Infrastructure Opportunity Discovery creates a deterministic review queue from existing local SEC / IR Evidence Database exports and AI Infrastructure Thesis-Gap Monitor outputs.
 
 The layer identifies companies where source-backed evidence is improving, gaps are closing, or catalyst evidence is becoming more visible. It is a discovery layer, not a stock picker and not a recommendation engine.
 
@@ -30,6 +30,14 @@ Required thesis-gap monitor artifacts:
 - `source_coverage.csv`
 - `monitor_warnings.md`
 
+Optional tracking and risk artifacts:
+
+- previous `opportunity_scorecard.json`
+- previous `opportunity_candidates.csv`
+- local risk warning summary CSV, JSON, or Markdown
+
+Optional risk inputs are read-only and path-guarded. The loader rejects obvious portfolio, IBKR, broker, or client-looking paths before reading contents.
+
 ## Outputs
 
 Default outputs are written under ignored `reports/` paths:
@@ -39,6 +47,8 @@ Default outputs are written under ignored `reports/` paths:
 - `opportunity_scorecard.json`
 - `opportunity_warnings.md`
 - `opportunity_discovery_manifest.json`
+- `opportunity_delta_summary.csv`
+- `opportunity_transition_report.md`
 
 ## Scoring Method
 
@@ -53,6 +63,25 @@ Each company receives deterministic component scores:
 - `missing_data_penalty`
 
 Source coverage, dated evidence, valuation-data availability, and risk warnings act as gates. Strong evidence with missing valuation data is classified as thesis-improving or valuation-blocked, not upgraded to review-candidate status.
+
+v0.6.1 adds prior-run delta fields:
+
+- `prior_status`
+- `current_status`
+- `status_change`
+- `score_delta`
+- `newly_promoted`
+- `newly_downgraded`
+- `unchanged`
+
+Every candidate also includes:
+
+- `why_this_status`
+- `what_would_upgrade`
+- `what_would_downgrade`
+- `unresolved_blockers`
+- `required_next_evidence`
+- `not_investment_advice`
 
 ## Statuses
 
@@ -71,13 +100,12 @@ Discovery status only means a company deserves structured review. IC readiness s
 
 ## Limitations
 
-- v0.1 uses deterministic rules only.
-- v0.1 depends on existing local artifacts.
+- The discovery queue uses deterministic rules only.
+- The discovery queue depends on existing local artifacts.
 - Valuation availability is a data-presence gate, not a valuation judgment.
-- Prior-week history is accepted for manifest tracking but not yet used for trend deltas.
+- Prior-run history supports status and score deltas, but does not infer investment merit.
 
 ## Next Steps
 
-- Add prior-run delta scoring.
 - Add explicit valuation artifact ingestion once a reviewed valuation export contract exists.
 - Add source-level catalyst taxonomy after more evidence DB history exists.
