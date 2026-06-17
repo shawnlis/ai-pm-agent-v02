@@ -19,6 +19,9 @@ def run_discovery(
     evidence_dir: Path | str,
     monitor_dir: Path | str,
     prior_monitor_dir: Path | str | None = None,
+    prior_scorecard_json: Path | str | None = None,
+    prior_candidates_csv: Path | str | None = None,
+    risk_summary_path: Path | str | None = None,
     out_dir: Path | str | None = None,
     as_of_date: date | None = None,
 ) -> dict[str, Any]:
@@ -26,6 +29,9 @@ def run_discovery(
         evidence_dir=evidence_dir,
         monitor_dir=monitor_dir,
         prior_monitor_dir=prior_monitor_dir,
+        prior_scorecard_json=prior_scorecard_json,
+        prior_candidates_csv=prior_candidates_csv,
+        risk_summary_path=risk_summary_path,
     )
     result = score_bundle(bundle, as_of_date=as_of_date)
     outputs = write_outputs(result, out_dir=out_dir)
@@ -42,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--monitor-dir", type=Path, required=True)
     parser.add_argument("--prior-monitor-dir", type=Path)
+    parser.add_argument("--prior-scorecard-json", type=Path)
+    parser.add_argument("--prior-candidates-csv", type=Path)
+    parser.add_argument("--risk-summary-path", type=Path)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--as-of-date", help="YYYY-MM-DD date recorded for deterministic runs.")
     parser.add_argument("--offline", action="store_true", help="Accepted for explicit offline runs; network is never used.")
@@ -58,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
             evidence_dir=args.evidence_dir,
             monitor_dir=args.monitor_dir,
             prior_monitor_dir=args.prior_monitor_dir,
+            prior_scorecard_json=args.prior_scorecard_json,
+            prior_candidates_csv=args.prior_candidates_csv,
+            risk_summary_path=args.risk_summary_path,
             out_dir=args.out_dir,
             as_of_date=as_of,
         )
