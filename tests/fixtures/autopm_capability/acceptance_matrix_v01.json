@@ -1,0 +1,95 @@
+{
+  "schema_version": "autopm_capability_acceptance.v0.1",
+  "capabilities": [
+    {
+      "capability": "business_model",
+      "required_fields": ["business_model_summary", "profit_pool", "reason_codes"],
+      "acceptance_standard": "Non-empty and source-backed or explicitly marked as inference."
+    },
+    {
+      "capability": "unit_economics",
+      "required_fields": ["unit_economics_score", "gross_margin_driver"],
+      "acceptance_standard": "Missing data cannot support a high score."
+    },
+    {
+      "capability": "growth_quality",
+      "required_fields": ["growth_quality_score", "growth_drivers"],
+      "acceptance_standard": "Volume, price, mix, acquisition, and one-time factors are separated."
+    },
+    {
+      "capability": "moat_competition",
+      "required_fields": ["moat_score", "competition_risks"],
+      "acceptance_standard": "At least one source-backed support, warning, or explicit data gap."
+    },
+    {
+      "capability": "industry_cycle",
+      "required_fields": ["industry_cycle_score", "cycle_stage"],
+      "acceptance_standard": "Cycle stage is identified or explicitly marked as a data gap."
+    },
+    {
+      "capability": "financial_quality",
+      "required_fields": ["financial_quality_score", "gross_margin_fcf_quality_score", "working_capital_warnings"],
+      "acceptance_standard": "Margin, FCF, inventory, or receivables evidence is present."
+    },
+    {
+      "capability": "capital_structure",
+      "required_fields": ["capital_structure_score", "leverage_warnings"],
+      "acceptance_standard": "Leverage risk is disclosed or no-gap flag is explicit."
+    },
+    {
+      "capability": "management_governance",
+      "required_fields": ["management_governance_score", "governance_warnings"],
+      "acceptance_standard": "Governance support, warning, or data gap is explicit."
+    },
+    {
+      "capability": "market_expectation_gap",
+      "required_fields": ["market_expectation_gap_score", "priced_in_risk", "priced_in_penalty"],
+      "acceptance_standard": "Price move outpacing EPS revision triggers priced-in penalty."
+    },
+    {
+      "capability": "technical_flow_signals",
+      "required_fields": ["momentum_technical_score", "market_data_stale"],
+      "acceptance_standard": "Stale price blocks valuation-dependent buy/add."
+    },
+    {
+      "capability": "valuation",
+      "required_fields": ["valuation_score", "valuation_basis", "valuation_gate"],
+      "acceptance_standard": "Missing valuation blocks buy/add."
+    },
+    {
+      "capability": "thesis_kill_triggers",
+      "required_fields": ["thesis_kill_triggers"],
+      "acceptance_standard": "Every buy/add expected outcome includes kill triggers."
+    },
+    {
+      "capability": "portfolio_fit",
+      "required_fields": ["portfolio_fit_score", "target_weight_pct", "max_position_pct"],
+      "acceptance_standard": "Target weight respects policy caps; concentration breach blocks add."
+    },
+    {
+      "capability": "asia_ai_hardware_bottleneck_score",
+      "required_fields": ["subsector", "bottleneck_score"],
+      "acceptance_standard": "Bottleneck score is explicit by subsector."
+    },
+    {
+      "capability": "ai_revenue_migration",
+      "required_fields": ["ai_revenue_migration_score", "ai_revenue_share", "ai_revenue_share_slope"],
+      "acceptance_standard": "Migration requires evidence; story-only claims cannot top-rank."
+    },
+    {
+      "capability": "customer_certification_order_visibility",
+      "required_fields": ["certification_stage", "order_visibility_quarters"],
+      "acceptance_standard": "Sample, qualification, volume production, and material revenue are distinct."
+    },
+    {
+      "capability": "gross_margin_fcf_quality",
+      "required_fields": ["gross_margin_fcf_quality_score", "working_capital_warnings"],
+      "acceptance_standard": "Inventory or receivables deterioration triggers risk penalty."
+    },
+    {
+      "capability": "valuation_expectation_gap",
+      "required_fields": ["valuation_expectation_gap_score", "priced_in_penalty"],
+      "acceptance_standard": "Valuation and price/EPS expectation gap are explicit."
+    }
+  ]
+}
