@@ -2,7 +2,16 @@
 
 AI PM Agent is a Python research workflow for public-company analysis, source-backed evidence tracking, PM decision logging, offline company database reporting, portfolio exposure review, and AI infrastructure thesis monitoring.
 
-The project is a review-first research system. It is not a trading bot, stock picker, broker workflow, client-advice system, or automatic PM recommendation engine.
+The project is a review-first research system by default. It is not a trading bot, broker workflow, or client-advice system.
+
+## Dual-Mode Direction
+
+AI PM Agent is moving toward a dual-mode architecture:
+
+- `review_first`: the default mode for evidence organization, research queues, gap monitoring, risk reporting, and approval packets. It must not output buy/sell/hold/add/trim, target weights, sizing, rebalances, orders, or trade instructions.
+- `autopm`: an explicit opt-in mode for future stock picker rankings, PM recommendations, target weights, and rebalance proposals. Autopm outputs are allowed only when enabled by command, config, or test fixture.
+
+Broker execution remains disabled unless a future execution adapter is explicitly implemented, tested, configured, and enabled. See `docs/AUTOPM_MODE_V01.md` for the mode contract.
 
 ## Canonical Workspace
 
