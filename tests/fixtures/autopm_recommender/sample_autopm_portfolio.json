@@ -1,0 +1,52 @@
+{
+  "as_of_date": "2026-06-20",
+  "base_currency": "USD",
+  "cash": 10.0,
+  "cash_currency": "USD",
+  "holdings": [
+    {
+      "ticker": "UNDER",
+      "name": "Synthetic Underweight AI Hardware",
+      "quantity": 1,
+      "market_value": 2.0,
+      "market_value_base": 2.0,
+      "theme": ["AI hardware"],
+      "region": "Asia",
+      "sector": "Information Technology",
+      "issuer_canonical_id": "UNDER_ISSUER"
+    },
+    {
+      "ticker": "OVER",
+      "name": "Synthetic Overweight AI Hardware",
+      "quantity": 1,
+      "market_value": 8.0,
+      "market_value_base": 8.0,
+      "theme": ["AI hardware"],
+      "region": "Asia",
+      "sector": "Information Technology",
+      "issuer_canonical_id": "OVER_ISSUER"
+    },
+    {
+      "ticker": "ASIA1",
+      "name": "Synthetic Asia Hardware Basket",
+      "quantity": 1,
+      "market_value": 18.0,
+      "market_value_base": 18.0,
+      "theme": ["AI hardware"],
+      "region": "Asia",
+      "sector": "Information Technology",
+      "issuer_canonical_id": "ASIA1_ISSUER"
+    },
+    {
+      "ticker": "USDEF",
+      "name": "Synthetic US Defensive",
+      "quantity": 1,
+      "market_value": 62.0,
+      "market_value_base": 62.0,
+      "theme": ["defensive"],
+      "region": "North America",
+      "sector": "Health Care",
+      "issuer_canonical_id": "USDEF_ISSUER"
+    }
+  ]
+}

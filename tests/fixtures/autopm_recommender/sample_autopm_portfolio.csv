@@ -1,0 +1,3 @@
+as_of_date,base_currency,cash,cash_currency,ticker,name,quantity,market_value,market_value_base,theme,region,sector,issuer_canonical_id
+2026-06-20,USD,10,USD,UNDER,Synthetic Underweight AI Hardware,1,2,2,AI hardware,Asia,Information Technology,UNDER_ISSUER
+2026-06-20,USD,10,USD,OVER,Synthetic Overweight AI Hardware,1,8,8,AI hardware,Asia,Information Technology,OVER_ISSUER
