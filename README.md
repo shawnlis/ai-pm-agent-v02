@@ -13,6 +13,15 @@ AI PM Agent is moving toward a dual-mode architecture:
 
 Broker execution remains disabled unless a future execution adapter is explicitly implemented, tested, configured, and enabled. See `docs/AUTOPM_MODE_V01.md` for the mode contract.
 
+## Autopm Local Alpha
+
+`v0.7-autopm-local-alpha` is the local-only autopm baseline for fixture-backed
+ranking, recommendation, rebalance proposal, output validation, backtest, paper
+portfolio, and monitor smoke testing. It does not add live data, broker read,
+broker execution, scheduler, notifications, or investment performance
+guarantees. See `docs/AUTOPM_LOCAL_ALPHA_V0_7.md` and
+`docs/AUTOPM_LOCAL_ALPHA_RUNBOOK_V01.md`.
+
 ## Canonical Workspace
 
 Use this checkout:
