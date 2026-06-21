@@ -1,0 +1,4 @@
+{
+  "passed": false,
+  "issues": [{"code": "MISSING_SOURCE_HASH"}]
+}

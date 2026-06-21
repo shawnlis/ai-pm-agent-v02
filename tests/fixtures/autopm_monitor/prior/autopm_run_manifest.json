@@ -1,0 +1,8 @@
+{
+  "schema_version": "autopm.v0.1",
+  "run_id": "prior-run",
+  "as_of_date": "2026-05-31",
+  "mode": "proposal",
+  "strategy": "fixture",
+  "source_manifest_hash": "src-prior"
+}

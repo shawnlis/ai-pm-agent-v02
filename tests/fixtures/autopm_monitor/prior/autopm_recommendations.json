@@ -1,0 +1,9 @@
+{
+  "not_executed": true,
+  "recommendations": [
+    {"ticker": "ACTUP", "action": "watch", "target_weight_pct": 0.0, "reason_codes": [], "source_refs": []},
+    {"ticker": "ACTDOWN", "action": "buy", "target_weight_pct": 4.0, "reason_codes": [], "source_refs": []},
+    {"ticker": "WTUP", "action": "hold", "target_weight_pct": 1.0, "reason_codes": [], "source_refs": []},
+    {"ticker": "WTDOWN", "action": "hold", "target_weight_pct": 4.0, "reason_codes": [], "source_refs": []}
+  ]
+}

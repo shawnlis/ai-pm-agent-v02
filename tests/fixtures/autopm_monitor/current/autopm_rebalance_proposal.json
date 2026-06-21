@@ -1,0 +1,12 @@
+{
+  "not_executed": true,
+  "proposed_trades": [
+    {
+      "ticker": "POLICY",
+      "action": "add",
+      "blocked_by": ["PORTFOLIO_POLICY_BLOCK", "THEME_EXPOSURE_LIMIT_EXCEEDED", "MIN_CASH_LIMIT_EXCEEDED"],
+      "not_executed": true,
+      "executable_proposal": false
+    }
+  ]
+}
