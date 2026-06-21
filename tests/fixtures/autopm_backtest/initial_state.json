@@ -1,0 +1,14 @@
+{
+  "fixture_only": true,
+  "as_of_date": "2026-01-31",
+  "cash": 10000.0,
+  "holdings": [
+    {
+      "ticker": "BASE",
+      "quantity": 100.0,
+      "last_price": 100.0,
+      "theme": "Core",
+      "region": "US"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "fixture_only": true,
+  "run_id": "fixture-backtest-v01",
+  "initial_state_file": "initial_state.json",
+  "prices_file": "prices.json",
+  "rebalance_events": [
+    {
+      "date": "2026-02-28",
+      "proposal": {
+        "schema_version": "autopm.v0.1",
+        "as_of_date": "2026-02-28",
+        "starting_cash_pct": 50.0,
+        "ending_cash_pct": 45.0,
+        "not_executed": true,
+        "proposed_trades": [
+          {
+            "ticker": "NEWAI",
+            "action": "buy",
+            "current_weight_pct": 0.0,
+            "target_weight_pct": 10.0,
+            "delta_weight_pct": 10.0,
+            "estimated_notional": 2000.0,
+            "source_date": "2026-02-15",
+            "blocked_by": [],
+            "manual_review_required": false,
+            "blocked": false,
+            "executable_proposal": true,
+            "not_executed": true,
+            "theme": "AI hardware",
+            "region": "Asia"
+          }
+        ]
+      }
+    }
+  ],
+  "valuation_dates": ["2026-03-31"],
+  "benchmark": [
+    {"date": "2026-01-31", "value": 100.0},
+    {"date": "2026-03-31", "value": 106.0}
+  ],
+  "recommendation_outcomes": [
+    {"ticker": "NEWAI", "action": "buy", "hit": true},
+    {"ticker": "BASE", "action": "hold", "hit": false}
+  ]
+}

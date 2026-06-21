@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "prices": [
+    {"date": "2026-01-31", "ticker": "BASE", "price": 100.0},
+    {"date": "2026-02-28", "ticker": "BASE", "price": 95.0},
+    {"date": "2026-02-28", "ticker": "NEWAI", "price": 50.0},
+    {"date": "2026-03-31", "ticker": "BASE", "price": 105.0},
+    {"date": "2026-03-31", "ticker": "NEWAI", "price": 60.0}
+  ]
+}
