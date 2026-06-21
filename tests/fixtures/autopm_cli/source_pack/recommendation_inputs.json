@@ -1,0 +1,74 @@
+{
+  "rows": [
+    {
+      "score": {
+        "ticker": "CLIAI",
+        "company_name": "CLI AI Components",
+        "market": "fixture",
+        "rank": 1,
+        "score": 0.86,
+        "tier": "top_pick",
+        "factor_scores": {
+          "business_quality_score": 0.86,
+          "growth_quality_score": 0.84,
+          "valuation_attractiveness_score": 0.82,
+          "momentum_technical_score": 0.74,
+          "balance_sheet_quality_score": 0.84
+        },
+        "reason_codes": ["RANKING_TOP_TIER"],
+        "data_gaps": [],
+        "red_flags": [],
+        "required_next_evidence": []
+      },
+      "current_weight_pct": 0.0,
+      "portfolio_gate": {
+        "passed": true,
+        "portfolio_fit_score": 0.9,
+        "current_weight_pct": 0.0,
+        "max_position_pct": 5.0,
+        "concentration_warnings": [],
+        "reason_codes": ["PORTFOLIO_POLICY_PASS"]
+      },
+      "evidence_gate": {
+        "passed": true,
+        "score": 0.92,
+        "reason_codes": ["EVIDENCE_OK"],
+        "warning_codes": [],
+        "required_next_evidence": []
+      },
+      "valuation_gate": {
+        "passed": true,
+        "score": 0.86,
+        "valuation_basis": "fixture valuation",
+        "reason_codes": ["VALUATION_OK"],
+        "warning_codes": []
+      },
+      "risk_gate": {
+        "passed": true,
+        "score": 0.88,
+        "risk_warnings": [],
+        "reason_codes": ["RISK_OK"]
+      },
+      "red_team": {
+        "passed": true,
+        "strongest_bear_case": "fixture demand fade",
+        "missing_evidence": [],
+        "thesis_kill_triggers": ["lost certification", "margin break", "valuation break"],
+        "downgrade_triggers": ["fresh evidence weakens"],
+        "warning_codes": []
+      },
+      "source_refs": [
+        {
+          "code": "AI_REVENUE_MIGRATION_EVIDENCED",
+          "source_hash": "src-cli-fixture",
+          "evidence_level": "primary_official",
+          "source_date": "2026-03-31",
+          "period": "2026Q1",
+          "field": "ai_revenue_share"
+        }
+      ],
+      "market_data_stale": false,
+      "today": "2026-06-21"
+    }
+  ]
+}
