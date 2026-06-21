@@ -1,0 +1,8 @@
+{
+  "rankings": [
+    {"ticker": "NEWTOP", "rank": 1, "tier": "top_pick", "reason_codes": ["NEW_REASON"], "source_refs": ["src-new"]},
+    {"ticker": "UP", "rank": 2, "tier": "candidate"},
+    {"ticker": "DOWN", "rank": 5, "tier": "candidate"},
+    {"ticker": "STAY", "rank": 3, "tier": "candidate"}
+  ]
+}

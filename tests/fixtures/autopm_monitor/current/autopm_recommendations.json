@@ -1,0 +1,25 @@
+{
+  "not_executed": true,
+  "recommendations": [
+    {
+      "ticker": "ACTUP",
+      "action": "buy",
+      "target_weight_pct": 3.0,
+      "reason_codes": [{"code": "ACTION_UP", "source_hash": "src-action"}],
+      "source_hashes": ["src-action"],
+      "required_next_evidence": ["customer order evidence"]
+    },
+    {
+      "ticker": "ACTDOWN",
+      "action": "watch",
+      "target_weight_pct": 0.0,
+      "risk_warnings": ["THESIS_KILL_TRIGGER_ACTIVATED"],
+      "reason_codes": [{"code": "THESIS_BREAK", "source_hash": "src-break"}],
+      "source_hashes": ["src-break"]
+    },
+    {"ticker": "WTUP", "action": "hold", "target_weight_pct": 2.5, "reason_codes": [], "source_refs": []},
+    {"ticker": "WTDOWN", "action": "hold", "target_weight_pct": 2.0, "reason_codes": [], "source_refs": []},
+    {"ticker": "STALE", "action": "manual_review", "target_weight_pct": 0.0, "risk_warnings": ["STALE_MARKET_DATA"], "data_gaps": ["STALE_MARKET_DATA"]},
+    {"ticker": "EVID", "action": "manual_review", "target_weight_pct": 0.0, "risk_warnings": ["STALE_EVIDENCE"], "data_gaps": ["STALE_EVIDENCE"]}
+  ]
+}
