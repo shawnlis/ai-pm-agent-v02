@@ -1,0 +1,42 @@
+{
+  "fixture_only": true,
+  "schema_version": "autopm.v0.1",
+  "as_of_date": "2026-02-28",
+  "starting_cash_pct": 50.0,
+  "ending_cash_pct": 40.0,
+  "not_executed": true,
+  "proposed_trades": [
+    {
+      "ticker": "NEWAI",
+      "action": "buy",
+      "current_weight_pct": 0.0,
+      "target_weight_pct": 10.0,
+      "delta_weight_pct": 10.0,
+      "estimated_notional": 2000.0,
+      "reason_codes": [],
+      "blocked_by": [],
+      "manual_review_required": false,
+      "blocked": false,
+      "executable_proposal": true,
+      "not_executed": true,
+      "theme": "AI hardware",
+      "region": "Asia"
+    },
+    {
+      "ticker": "BASE",
+      "action": "trim",
+      "current_weight_pct": 50.0,
+      "target_weight_pct": 45.0,
+      "delta_weight_pct": -5.0,
+      "estimated_notional": -1000.0,
+      "reason_codes": [],
+      "blocked_by": [],
+      "manual_review_required": false,
+      "blocked": false,
+      "executable_proposal": true,
+      "not_executed": true,
+      "theme": "Core",
+      "region": "US"
+    }
+  ]
+}
