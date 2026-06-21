@@ -209,7 +209,7 @@ def test_no_network_access_required(monkeypatch: pytest.MonkeyPatch) -> None:
     assert build_rebalance_proposal([_rec("NEWAI", "buy", 0.0, 3.0)], as_of_date="2026-06-21", starting_cash_pct=10.0).proposal.not_executed is True
 
 
-def test_no_broker_execution_imports_or_cli_files() -> None:
+def test_no_broker_execution_imports() -> None:
     for path in [Path("src/ai_pm_agent/autopm/rebalance.py")]:
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip().lower()
@@ -217,5 +217,3 @@ def test_no_broker_execution_imports_or_cli_files() -> None:
                 assert "broker" not in stripped
                 assert "ibkr" not in stripped
                 assert "execution" not in stripped
-    assert not Path("src/ai_pm_agent/cli/autopm.py").exists()
-    assert not Path("scripts/autopm.py").exists()

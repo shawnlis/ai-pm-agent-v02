@@ -1,0 +1,13 @@
+{
+  "policy": {
+    "max_single_name_weight_pct": 5.0,
+    "max_theme_weight_pct": 35.0,
+    "max_region_weight_pct": 80.0,
+    "max_leverage_adjusted_exposure_pct": 120.0,
+    "min_cash_pct": 2.0,
+    "max_new_position_pct": 3.0,
+    "max_add_pct_per_run": 2.0,
+    "trim_threshold_pct": 1.0,
+    "sell_allowed": true
+  }
+}

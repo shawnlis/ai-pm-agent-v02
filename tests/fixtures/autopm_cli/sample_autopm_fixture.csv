@@ -1,0 +1,2 @@
+as_of_date,ticker,name,market,quantity,market_value,base_currency,cash,currency,theme,region,sector,issuer_name,leverage_multiplier,asset_class
+2026-06-21,BASE,Base Holding,fixture,1,1000,USD,9000,USD,AI hardware,Asia,Information Technology,Base Holding,1.0,equity

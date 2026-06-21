@@ -1,0 +1,45 @@
+{
+  "rows": [
+    {
+      "ticker": "ASICLI",
+      "company_name": "Asia CLI Hardware Leader",
+      "market": "fixture",
+      "subsector": "CCL_M8_M9",
+      "source_hashes": ["src-cli-fixture"],
+      "source_refs": ["fixture:asia-cli"],
+      "ai_revenue_share_pct": 32.0,
+      "ai_revenue_share_slope_pct": 12.0,
+      "certification_stage": "material_revenue",
+      "material_revenue_evidence": true,
+      "order_visibility_quarters": 4.0,
+      "high_end_capacity_expansion": true,
+      "gross_margin_trend_bps": 140.0,
+      "fcf_conversion_pct": 72.0,
+      "contract_liabilities_growth_pct": 20.0,
+      "inventory_growth_pct": 12.0,
+      "receivables_growth_pct": 10.0,
+      "revenue_growth_pct": 24.0,
+      "asp_trend_pct": 8.0,
+      "eps_revision_pct": 18.0,
+      "price_move_pct": 20.0,
+      "valuation_label": "reasonable",
+      "customer_concentration_risk": 0.25,
+      "second_source_risk": 0.2,
+      "evidence_quality_score": 0.9,
+      "market_data_stale": false,
+      "story_only_ai_claim": false
+    },
+    {
+      "ticker": "AISTOR",
+      "company_name": "Story Only CLI Hardware",
+      "market": "fixture",
+      "subsector": "ODM_AI_SERVER",
+      "source_hashes": ["src-cli-fixture"],
+      "source_refs": ["fixture:story"],
+      "certification_stage": "sample",
+      "valuation_label": "missing",
+      "evidence_quality_score": 0.25,
+      "story_only_ai_claim": true
+    }
+  ]
+}
