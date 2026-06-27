@@ -21,6 +21,7 @@ PACK_FILES = {
 OPPORTUNITY_STATES = {
     "WATCHLIST_ONLY",
     "EVIDENCE_BLOCKED",
+    "VALUATION_BLOCKED",
     "THESIS_IMPROVING",
     "CATALYST_MONITOR",
     "DO_NOT_USE",
@@ -95,6 +96,17 @@ class ImportedAlphaItem:
     what_would_upgrade: str = ""
     what_would_downgrade: str = ""
     mapping_reason: str = ""
+    mapping_reason_codes: tuple[str, ...] = field(default_factory=tuple)
+    valuation_required: bool = False
+    portfolio_context_required_but_not_used: bool = False
+
+    @property
+    def source_alpha_status(self) -> str:
+        return self.source_status
+
+    @property
+    def mapped_ai_pm_status(self) -> str:
+        return self.opportunity_state
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -103,6 +115,8 @@ class ImportedAlphaItem:
             "title": self.title,
             "opportunity_state": self.opportunity_state,
             "source_status": self.source_status,
+            "source_alpha_status": self.source_alpha_status,
+            "mapped_ai_pm_status": self.mapped_ai_pm_status,
             "review_status": self.review_status,
             "source_refs": list(self.source_refs),
             "evidence_provenance": [provenance.__dict__ for provenance in self.evidence_provenance],
@@ -113,6 +127,9 @@ class ImportedAlphaItem:
             "what_would_upgrade": self.what_would_upgrade,
             "what_would_downgrade": self.what_would_downgrade,
             "mapping_reason": self.mapping_reason,
+            "mapping_reason_codes": list(self.mapping_reason_codes),
+            "valuation_required": self.valuation_required,
+            "portfolio_context_required_but_not_used": self.portfolio_context_required_but_not_used,
         }
 
 

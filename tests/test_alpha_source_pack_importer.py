@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ if str(SRC) not in sys.path:
 from ai_pm_agent.alpha_source_pack.loader import AlphaSourcePackValidationError, load_alpha_source_pack
 from ai_pm_agent.alpha_source_pack.mapper import map_alpha_source_pack
 from ai_pm_agent.alpha_source_pack.report_writer import render_review_report, write_review_report
+from ai_pm_agent.alpha_source_pack.validator import QUALITY_FIELDS
 
 
 FIXTURE_PACK = ROOT / "tests" / "fixtures" / "alpha_source_pack" / "2026-06-27"
@@ -53,6 +55,25 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def read_quality_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def write_quality_rows(path: Path, rows: list[dict[str, str]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=QUALITY_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def find_item(result, source_id_prefix: str):
+    for item in result.imported_signals + result.imported_candidates:
+        if item.source_id.startswith(source_id_prefix):
+            return item
+    raise AssertionError(f"item not found: {source_id_prefix}")
+
+
 def test_valid_pack_imports_review_first_queue(tmp_path: Path) -> None:
     pack = load_alpha_source_pack(FIXTURE_PACK)
     result = map_alpha_source_pack(pack)
@@ -65,6 +86,74 @@ def test_valid_pack_imports_review_first_queue(tmp_path: Path) -> None:
     assert result.boundary["portfolio_context_used"] is False
     assert report.exists()
     assert "Alpha Source Pack Review Queue" in report.read_text(encoding="utf-8")
+
+
+def test_watch_with_missing_peer_evidence_maps_evidence_blocked() -> None:
+    result = map_alpha_source_pack(load_alpha_source_pack(FIXTURE_PACK))
+    item = find_item(result, "signal-nand-and-enterprise-ssd-cycle")
+
+    assert item.source_alpha_status == "Watch"
+    assert item.mapped_ai_pm_status == "EVIDENCE_BLOCKED"
+    assert "MISSING_EVIDENCE" in item.mapping_reason_codes
+    assert any("peer evidence" in missing for missing in item.missing_evidence)
+
+
+def test_reviewed_incubating_quality_passed_maps_thesis_improving(tmp_path: Path) -> None:
+    pack_dir = copy_pack(tmp_path)
+    path = pack_dir / "quality_audit.csv"
+    rows = read_quality_rows(path)
+    rows[0]["classification"] = "acceptable"
+    rows[0]["issues"] = ""
+    rows[0]["missing_evidence"] = ""
+    rows[0]["confidence_cap_reason"] = ""
+    write_quality_rows(path, rows)
+
+    result = map_alpha_source_pack(load_alpha_source_pack(pack_dir))
+    item = find_item(result, "signal-ai-memory-demand-remains-stronger")
+
+    assert item.mapped_ai_pm_status == "THESIS_IMPROVING"
+    assert item.mapping_reason_codes == ("REVIEWED_INCUBATING", "QUALITY_AUDIT_PASSED")
+
+
+def test_rejected_noise_maps_do_not_use(tmp_path: Path) -> None:
+    pack_dir = copy_pack(tmp_path)
+    path = pack_dir / "reviewed_signals.jsonl"
+    rows = read_jsonl(path)
+    rows[0]["status"] = "Rejected"
+    write_jsonl(path, rows)
+
+    result = map_alpha_source_pack(load_alpha_source_pack(pack_dir))
+    item = find_item(result, "signal-ai-memory-demand-remains-stronger")
+
+    assert item.mapped_ai_pm_status == "DO_NOT_USE"
+    assert item.mapping_reason_codes == ("SOURCE_REJECTED_NOISE",)
+
+
+def test_missing_valuation_maps_valuation_blocked(tmp_path: Path) -> None:
+    pack_dir = copy_pack(tmp_path)
+    path = pack_dir / "quality_audit.csv"
+    rows = read_quality_rows(path)
+    rows[0]["classification"] = "acceptable"
+    rows[0]["issues"] = ""
+    rows[0]["missing_evidence"] = "valuation evidence"
+    rows[0]["confidence_cap_reason"] = ""
+    write_quality_rows(path, rows)
+
+    result = map_alpha_source_pack(load_alpha_source_pack(pack_dir))
+    item = find_item(result, "signal-ai-memory-demand-remains-stronger")
+
+    assert item.mapped_ai_pm_status == "VALUATION_BLOCKED"
+    assert item.valuation_required is True
+    assert "VALUATION_EVIDENCE_MISSING" in item.mapping_reason_codes
+
+
+def test_mapping_reason_codes_appear_in_report() -> None:
+    result = map_alpha_source_pack(load_alpha_source_pack(FIXTURE_PACK))
+    report = render_review_report(result)
+
+    assert "Mapping reason codes:" in report
+    assert "MISSING_EVIDENCE" in report
+    assert "Mapped AI PM status:" in report
 
 
 def test_draft_record_in_reviewed_signals_blocks_import(tmp_path: Path) -> None:

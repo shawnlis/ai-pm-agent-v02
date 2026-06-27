@@ -43,9 +43,9 @@ def render_review_report(result: AlphaSourcePackImportResult) -> str:
     if not result.state_counts:
         lines.append("- none")
 
-    lines.extend(["", "## Imported Signals", ""])
+    lines.extend(["", "## Imported Signals Mapping Audit", ""])
     lines.extend(_item_lines(result.imported_signals))
-    lines.extend(["", "## Imported Candidates", ""])
+    lines.extend(["", "## Imported Candidates Mapping Audit", ""])
     lines.extend(_item_lines(result.imported_candidates))
     lines.extend(["", "## Evidence Quality", ""])
     lines.extend(_evidence_quality_lines(result))
@@ -66,9 +66,17 @@ def _item_lines(items: tuple[ImportedAlphaItem, ...]) -> list[str]:
         lines.extend(
             [
                 f"- `{item.source_id}` {item.title}",
-                f"  - State: {item.opportunity_state}",
-                f"  - Source status: {item.source_status}; review status: {item.review_status}",
+                f"  - Source Alpha status: {item.source_alpha_status}",
+                f"  - Mapped AI PM status: {item.mapped_ai_pm_status}",
+                f"  - Review status: {item.review_status}",
+                f"  - Mapping reason codes: {', '.join(item.mapping_reason_codes) or 'none'}",
                 f"  - Mapping reason: {item.mapping_reason}",
+                f"  - Missing evidence: {', '.join(item.missing_evidence) or 'none'}",
+                f"  - What would upgrade: {item.what_would_upgrade or 'Additional reviewed evidence.'}",
+                f"  - What would downgrade: {item.what_would_downgrade or 'Contradictory reviewed evidence.'}",
+                f"  - Red-team objection: {item.red_team_objection or 'Not specified.'}",
+                f"  - Valuation required: {str(item.valuation_required).lower()}",
+                f"  - Portfolio context required but not used: {str(item.portfolio_context_required_but_not_used).lower()}",
                 f"  - Provenance refs: {', '.join(item.source_refs) or 'none'}",
             ]
         )
