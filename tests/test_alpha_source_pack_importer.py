@@ -94,8 +94,13 @@ def test_watch_with_missing_peer_evidence_maps_evidence_blocked() -> None:
 
     assert item.source_alpha_status == "Watch"
     assert item.mapped_ai_pm_status == "EVIDENCE_BLOCKED"
+    assert item.current_blocker == "required evidence is missing"
     assert "MISSING_EVIDENCE" in item.mapping_reason_codes
     assert any("peer evidence" in missing for missing in item.missing_evidence)
+    assert any("peer evidence" in missing for missing in item.exact_missing_evidence)
+    assert "resolve exact missing evidence listed above" in item.required_for_THESIS_IMPROVING
+    assert "event or catalyst evidence must be explicit and reviewed" in item.required_for_CATALYST_MONITOR
+    assert "current blocker must be resolved before higher-confidence review" in item.required_for_OPPORTUNITY_REVIEW
 
 
 def test_reviewed_incubating_quality_passed_maps_thesis_improving(tmp_path: Path) -> None:
@@ -144,7 +149,32 @@ def test_missing_valuation_maps_valuation_blocked(tmp_path: Path) -> None:
 
     assert item.mapped_ai_pm_status == "VALUATION_BLOCKED"
     assert item.valuation_required is True
+    assert item.current_blocker == "valuation evidence is missing"
+    assert item.valuation_gap == "valuation-sensitive evidence is missing; importer does not compute valuation"
+    assert "valuation evidence for valuation-sensitive claim" in item.exact_missing_evidence
     assert "VALUATION_EVIDENCE_MISSING" in item.mapping_reason_codes
+
+
+def test_portfolio_context_gap_is_explained_without_using_portfolio(tmp_path: Path) -> None:
+    pack_dir = copy_pack(tmp_path)
+    path = pack_dir / "quality_audit.csv"
+    rows = read_quality_rows(path)
+    rows[0]["classification"] = "acceptable"
+    rows[0]["issues"] = ""
+    rows[0]["missing_evidence"] = "portfolio context evidence"
+    rows[0]["confidence_cap_reason"] = ""
+    write_quality_rows(path, rows)
+
+    result = map_alpha_source_pack(load_alpha_source_pack(pack_dir))
+    item = find_item(result, "signal-ai-memory-demand-remains-stronger")
+
+    assert item.mapped_ai_pm_status == "EVIDENCE_BLOCKED"
+    assert item.portfolio_context_required_but_not_used is True
+    assert item.portfolio_gap_not_used == (
+        "portfolio context would be required for exposure-aware review, but this importer does not use portfolio data"
+    )
+    assert "PORTFOLIO_CONTEXT_REQUIRED_NOT_USED" in item.mapping_reason_codes
+    assert result.boundary["portfolio_context_used"] is False
 
 
 def test_mapping_reason_codes_appear_in_report() -> None:
@@ -154,6 +184,14 @@ def test_mapping_reason_codes_appear_in_report() -> None:
     assert "Mapping reason codes:" in report
     assert "MISSING_EVIDENCE" in report
     assert "Mapped AI PM status:" in report
+    assert "Current blocker:" in report
+    assert "Exact missing evidence:" in report
+    assert "Required for THESIS_IMPROVING:" in report
+    assert "Required for CATALYST_MONITOR:" in report
+    assert "Required for OPPORTUNITY_REVIEW:" in report
+    assert "Valuation gap:" in report
+    assert "Portfolio gap not used:" in report
+    assert "Red-team blocker:" in report
 
 
 def test_draft_record_in_reviewed_signals_blocks_import(tmp_path: Path) -> None:

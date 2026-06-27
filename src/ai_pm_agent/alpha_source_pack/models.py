@@ -99,6 +99,14 @@ class ImportedAlphaItem:
     mapping_reason_codes: tuple[str, ...] = field(default_factory=tuple)
     valuation_required: bool = False
     portfolio_context_required_but_not_used: bool = False
+    current_blocker: str = ""
+    exact_missing_evidence: tuple[str, ...] = field(default_factory=tuple)
+    required_for_THESIS_IMPROVING: tuple[str, ...] = field(default_factory=tuple)
+    required_for_CATALYST_MONITOR: tuple[str, ...] = field(default_factory=tuple)
+    required_for_OPPORTUNITY_REVIEW: tuple[str, ...] = field(default_factory=tuple)
+    valuation_gap: str = ""
+    portfolio_gap_not_used: str = ""
+    red_team_blocker: str = ""
 
     @property
     def source_alpha_status(self) -> str:
@@ -130,6 +138,14 @@ class ImportedAlphaItem:
             "mapping_reason_codes": list(self.mapping_reason_codes),
             "valuation_required": self.valuation_required,
             "portfolio_context_required_but_not_used": self.portfolio_context_required_but_not_used,
+            "current_blocker": self.current_blocker,
+            "exact_missing_evidence": list(self.exact_missing_evidence),
+            "required_for_THESIS_IMPROVING": list(self.required_for_THESIS_IMPROVING),
+            "required_for_CATALYST_MONITOR": list(self.required_for_CATALYST_MONITOR),
+            "required_for_OPPORTUNITY_REVIEW": list(self.required_for_OPPORTUNITY_REVIEW),
+            "valuation_gap": self.valuation_gap,
+            "portfolio_gap_not_used": self.portfolio_gap_not_used,
+            "red_team_blocker": self.red_team_blocker,
         }
 
 

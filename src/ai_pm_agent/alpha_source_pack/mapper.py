@@ -85,6 +85,18 @@ def _map_signal(pack: AlphaSourcePack, signal: dict[str, Any]) -> ImportedAlphaI
     else:
         state = "EVIDENCE_BLOCKED"
         reason_codes = ["IMPORT_RULE_FALLBACK"]
+    diagnosis = _build_diagnosis(
+        source_kind="signal",
+        source_status=signal["status"],
+        review_status=signal["review_status"],
+        opportunity_state=state,
+        reason_codes=reason_codes,
+        missing=missing,
+        issues=issues,
+        valuation_required=valuation_required,
+        portfolio_context_required=portfolio_context_required,
+        red_team_objection=signal.get("red_team_objection", ""),
+    )
 
     return ImportedAlphaItem(
         source_id=signal["id"],
@@ -105,6 +117,14 @@ def _map_signal(pack: AlphaSourcePack, signal: dict[str, Any]) -> ImportedAlphaI
         mapping_reason_codes=tuple(reason_codes),
         valuation_required=valuation_required,
         portfolio_context_required_but_not_used=portfolio_context_required,
+        current_blocker=diagnosis["current_blocker"],
+        exact_missing_evidence=tuple(diagnosis["exact_missing_evidence"]),
+        required_for_THESIS_IMPROVING=tuple(diagnosis["required_for_THESIS_IMPROVING"]),
+        required_for_CATALYST_MONITOR=tuple(diagnosis["required_for_CATALYST_MONITOR"]),
+        required_for_OPPORTUNITY_REVIEW=tuple(diagnosis["required_for_OPPORTUNITY_REVIEW"]),
+        valuation_gap=diagnosis["valuation_gap"],
+        portfolio_gap_not_used=diagnosis["portfolio_gap_not_used"],
+        red_team_blocker=diagnosis["red_team_blocker"],
     )
 
 
@@ -150,6 +170,18 @@ def _map_candidate(pack: AlphaSourcePack, candidate: dict[str, Any]) -> Imported
     else:
         state = "EVIDENCE_BLOCKED"
         reason_codes = ["IMPORT_RULE_FALLBACK"]
+    diagnosis = _build_diagnosis(
+        source_kind="theme_candidate",
+        source_status=candidate["status"],
+        review_status=candidate["review_status"],
+        opportunity_state=state,
+        reason_codes=reason_codes,
+        missing=missing,
+        issues=[],
+        valuation_required=valuation_required,
+        portfolio_context_required=portfolio_context_required,
+        red_team_objection=candidate.get("red_team_objection", ""),
+    )
 
     return ImportedAlphaItem(
         source_id=candidate["candidate_id"],
@@ -169,6 +201,14 @@ def _map_candidate(pack: AlphaSourcePack, candidate: dict[str, Any]) -> Imported
         mapping_reason_codes=tuple(reason_codes),
         valuation_required=valuation_required,
         portfolio_context_required_but_not_used=portfolio_context_required,
+        current_blocker=diagnosis["current_blocker"],
+        exact_missing_evidence=tuple(diagnosis["exact_missing_evidence"]),
+        required_for_THESIS_IMPROVING=tuple(diagnosis["required_for_THESIS_IMPROVING"]),
+        required_for_CATALYST_MONITOR=tuple(diagnosis["required_for_CATALYST_MONITOR"]),
+        required_for_OPPORTUNITY_REVIEW=tuple(diagnosis["required_for_OPPORTUNITY_REVIEW"]),
+        valuation_gap=diagnosis["valuation_gap"],
+        portfolio_gap_not_used=diagnosis["portfolio_gap_not_used"],
+        red_team_blocker=diagnosis["red_team_blocker"],
     )
 
 
@@ -200,6 +240,179 @@ def _contains_any(values: list[str], terms: tuple[str, ...]) -> bool:
 
 def _mapping_reason(codes: list[str]) -> str:
     return " ".join(REASON_TEXT.get(code, code) for code in codes)
+
+
+def _build_diagnosis(
+    *,
+    source_kind: str,
+    source_status: str,
+    review_status: str,
+    opportunity_state: str,
+    reason_codes: list[str],
+    missing: list[str],
+    issues: list[str],
+    valuation_required: bool,
+    portfolio_context_required: bool,
+    red_team_objection: str,
+) -> dict[str, str | list[str]]:
+    exact_missing = _exact_missing_evidence(
+        reason_codes=reason_codes,
+        missing=missing,
+        issues=issues,
+        valuation_required=valuation_required,
+        portfolio_context_required=portfolio_context_required,
+    )
+    if not exact_missing and opportunity_state in {"EVIDENCE_BLOCKED", "VALUATION_BLOCKED"}:
+        exact_missing = ["import promotion rule is not satisfied"]
+
+    return {
+        "current_blocker": _current_blocker(opportunity_state, reason_codes),
+        "exact_missing_evidence": exact_missing,
+        "required_for_THESIS_IMPROVING": _required_for_thesis_improving(
+            source_kind=source_kind,
+            source_status=source_status,
+            review_status=review_status,
+            opportunity_state=opportunity_state,
+            exact_missing=exact_missing,
+        ),
+        "required_for_CATALYST_MONITOR": _required_for_catalyst_monitor(
+            review_status=review_status,
+            opportunity_state=opportunity_state,
+            exact_missing=exact_missing,
+        ),
+        "required_for_OPPORTUNITY_REVIEW": _required_for_opportunity_review(
+            opportunity_state=opportunity_state,
+            exact_missing=exact_missing,
+        ),
+        "valuation_gap": (
+            "valuation-sensitive evidence is missing; importer does not compute valuation"
+            if valuation_required
+            else "none"
+        ),
+        "portfolio_gap_not_used": (
+            "portfolio context would be required for exposure-aware review, but this importer does not use portfolio data"
+            if portfolio_context_required
+            else "none"
+        ),
+        "red_team_blocker": red_team_objection or "none exported",
+    }
+
+
+def _exact_missing_evidence(
+    *,
+    reason_codes: list[str],
+    missing: list[str],
+    issues: list[str],
+    valuation_required: bool,
+    portfolio_context_required: bool,
+) -> list[str]:
+    exact: list[str] = []
+    if "SOURCE_REJECTED_NOISE" in reason_codes:
+        exact.append("source Alpha record was rejected/noise")
+    if "NOT_MANUALLY_REVIEWED" in reason_codes:
+        exact.append("manual review of source Alpha record")
+    for item in missing:
+        exact.append(item)
+    for issue in issues:
+        exact.append(f"quality audit issue: {issue}")
+    if valuation_required:
+        exact.append("valuation evidence for valuation-sensitive claim")
+    if portfolio_context_required:
+        exact.append("portfolio context intentionally not used by review-first importer")
+    return _dedupe_preserve_order(exact)
+
+
+def _current_blocker(opportunity_state: str, reason_codes: list[str]) -> str:
+    if opportunity_state == "DO_NOT_USE":
+        return "source record is rejected/noise"
+    if opportunity_state == "VALUATION_BLOCKED":
+        return "valuation evidence is missing"
+    if "NOT_MANUALLY_REVIEWED" in reason_codes:
+        return "manual review is missing"
+    if "MISSING_EVIDENCE" in reason_codes:
+        return "required evidence is missing"
+    if "QUALITY_AUDIT_BLOCKER" in reason_codes or "QUALITY_AUDIT_ISSUES" in reason_codes:
+        return "quality audit blocks promotion"
+    if "PORTFOLIO_CONTEXT_REQUIRED_NOT_USED" in reason_codes:
+        return "portfolio context was intentionally not used"
+    if opportunity_state == "WATCHLIST_ONLY":
+        return "reviewed Watch source remains watchlist-only"
+    if opportunity_state in {"THESIS_IMPROVING", "CATALYST_MONITOR"}:
+        return "none"
+    return "import promotion rule is not satisfied"
+
+
+def _required_for_thesis_improving(
+    *,
+    source_kind: str,
+    source_status: str,
+    review_status: str,
+    opportunity_state: str,
+    exact_missing: list[str],
+) -> list[str]:
+    if opportunity_state == "THESIS_IMPROVING":
+        return ["already mapped to THESIS_IMPROVING"]
+    requirements = []
+    if review_status != "reviewed":
+        requirements.append("source Alpha record review_status must be reviewed")
+    if source_status != "Incubating":
+        requirements.append("source Alpha status must be Incubating")
+    requirements.append("quality audit must have no blocking classification or unresolved issues")
+    requirements.append("missing evidence list must be cleared")
+    if source_kind == "theme_candidate":
+        requirements.append("candidate must have reviewed evidence refs that support the thesis")
+    if exact_missing:
+        requirements.append("resolve exact missing evidence listed above")
+    return _dedupe_preserve_order(requirements)
+
+
+def _required_for_catalyst_monitor(
+    *,
+    review_status: str,
+    opportunity_state: str,
+    exact_missing: list[str],
+) -> list[str]:
+    if opportunity_state == "CATALYST_MONITOR":
+        return ["already mapped to CATALYST_MONITOR"]
+    requirements = []
+    if review_status != "reviewed":
+        requirements.append("source Alpha record review_status must be reviewed")
+    requirements.extend(
+        [
+            "source Alpha status must be Incubating",
+            "quality audit must have no blocking classification or unresolved issues",
+            "event or catalyst evidence must be explicit and reviewed",
+            "missing evidence list must be cleared",
+        ]
+    )
+    if exact_missing:
+        requirements.append("resolve exact missing evidence listed above")
+    return _dedupe_preserve_order(requirements)
+
+
+def _required_for_opportunity_review(opportunity_state: str, exact_missing: list[str]) -> list[str]:
+    requirements = [
+        "human reviewer must inspect source provenance and Alpha pack context",
+        "report must remain review_first with no allocation or execution output",
+    ]
+    if opportunity_state in {"EVIDENCE_BLOCKED", "VALUATION_BLOCKED"}:
+        requirements.append("current blocker must be resolved before higher-confidence review")
+    if opportunity_state == "DO_NOT_USE":
+        requirements.append("record should stay excluded unless a future Alpha pack reverses rejection/noise status")
+    if exact_missing:
+        requirements.append("resolve exact missing evidence listed above")
+    return _dedupe_preserve_order(requirements)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for item in items:
+        normalized = item.strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            output.append(normalized)
+    return output
 
 
 def _split_semicolonish(value: str) -> list[str]:
