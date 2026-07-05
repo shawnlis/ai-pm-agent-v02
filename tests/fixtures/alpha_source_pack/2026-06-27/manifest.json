@@ -1,0 +1,37 @@
+{
+  "counts": {
+    "evidence_manifest": 9,
+    "outcomes": 0,
+    "quality_audit_rows": 5,
+    "reviewed_signals": 5,
+    "theme_candidates": 10
+  },
+  "created_at": "2026-06-27T10:10:49Z",
+  "excluded_counts": {
+    "draft_evidence_contents_excluded": 2,
+    "env_files_excluded": 1,
+    "evidence_mock": 0,
+    "evidence_unreferenced": 53,
+    "raw_payload_files_excluded": 30,
+    "signals_mock": 1
+  },
+  "export_date": "2026-06-27",
+  "export_rules": [
+    "Export reviewed non-mock Signal Cards only.",
+    "Export reviewed candidates and non-mock Watch/Incubating candidates with valid evidence refs.",
+    "Export evidence as a manifest only: identifiers, provenance fields, reliability, and review status.",
+    "Do not copy raw SEC HTML, fetched payloads, draft evidence contents, .env, credentials, or scratch files.",
+    "Do not upgrade evidence, candidate, or signal review/status fields during export."
+  ],
+  "files": {
+    "evidence_manifest": "evidence_manifest.jsonl",
+    "outcomes": "outcomes.jsonl",
+    "quality_audit": "quality_audit.csv",
+    "red_team_summary": "red_team_summary.md",
+    "rejected_noise_summary": "rejected_noise_summary.md",
+    "reviewed_signals": "reviewed_signals.jsonl",
+    "theme_candidates": "theme_candidates.jsonl"
+  },
+  "pack_version": "alpha-source-pack-v1",
+  "project_name": "alpha-research-team"
+}
