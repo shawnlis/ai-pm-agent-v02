@@ -39,7 +39,9 @@ class ReadOnlyProviderRequest:
 @dataclass(frozen=True)
 class ReadOnlyProviderResponse:
     status_code: int
-    body: str
+    # Real transports must supply original response bytes. Text remains
+    # supported for existing explicit fixtures and is encoded as UTF-8.
+    body: bytes | str
     headers: dict[str, str] | None = None
 
 
@@ -113,9 +115,11 @@ class OfficialPublicReadOnlyProvider:
         response = self.transport(request)
         if response.status_code < 200 or response.status_code >= 300:
             raise LiveProviderError(f"provider returned HTTP {response.status_code}")
-        payload = _parse_payload(response.body)
-        source_hash = compute_source_hash(decision.normalized_url, response.body)
-        cache_path = _write_cache_if_enabled(self.config, source_hash, response.body)
+        raw_body = _response_bytes(response.body)
+        # HEAD returns metadata only; a GET must contain valid JSON.
+        payload = None if request.method == "HEAD" else _parse_payload(raw_body)
+        source_hash = compute_source_hash(decision.normalized_url, raw_body)
+        cache_path = _write_cache_if_enabled(self.config, source_hash, raw_body)
         retrieval_time = datetime.now(UTC).replace(microsecond=0).isoformat()
         return ReadOnlyProviderResult(
             provider_name=decision.provider_name,
@@ -131,36 +135,47 @@ class OfficialPublicReadOnlyProvider:
         )
 
 
-def compute_source_hash(source_url: str, body: str) -> str:
-    """Return a deterministic hash over source identity and payload."""
+def compute_source_hash(source_url: str, body: bytes | str) -> str:
+    """Return SHA-256 of the exact response bytes, without JSON normalization.
 
-    material = f"{source_url.strip()}\n{_canonical_body(body)}"
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+    source_url stays in the signature for callers and separately in manifests;
+    it is not part of the byte hash. Text fixtures are explicitly UTF-8 encoded.
+    """
+
+    return hashlib.sha256(_response_bytes(body)).hexdigest()
 
 
 def _default_refusing_transport(request: ReadOnlyProviderRequest) -> ReadOnlyProviderResponse:
     raise LiveProviderError("default live transport is disabled; inject an approved read-only transport")
 
 
-def _parse_payload(body: str) -> Any:
+def _parse_payload(body: bytes) -> Any:
     try:
-        return json.loads(body)
-    except json.JSONDecodeError:
+        return json.loads(body, parse_constant=_reject_nonfinite_json)
+    except ValueError as exc:
+        raise LiveProviderError("provider returned invalid JSON") from exc
+
+
+def _reject_nonfinite_json(value: str) -> None:
+    raise ValueError("non-finite JSON literal")
+
+
+def _response_bytes(body: bytes | str) -> bytes:
+    if isinstance(body, bytes):
         return body
+    if isinstance(body, str):
+        try:
+            return body.encode("utf-8")
+        except UnicodeError as exc:
+            raise LiveProviderError("provider returned invalid text encoding") from exc
+    raise LiveProviderError("provider response body must be bytes or text")
 
 
-def _canonical_body(body: str) -> str:
-    parsed = _parse_payload(body)
-    if isinstance(parsed, (dict, list)):
-        return json.dumps(parsed, sort_keys=True, separators=(",", ":"))
-    return body
-
-
-def _write_cache_if_enabled(config: ReadOnlyLiveProviderConfig, source_hash: str, body: str) -> str:
+def _write_cache_if_enabled(config: ReadOnlyLiveProviderConfig, source_hash: str, body: bytes) -> str:
     if not config.cache_enabled:
         return ""
     cache_dir = validate_cache_dir(config.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{source_hash}.json"
-    cache_path.write_text(body, encoding="utf-8")
+    cache_path.write_bytes(body)
     return str(cache_path)

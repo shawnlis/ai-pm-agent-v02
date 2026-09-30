@@ -116,6 +116,13 @@ def evaluate_live_provider_request(
         errors.append("NON_HTTPS_URL_FORBIDDEN")
     if parsed.scheme in {"http", "https"} and not domain:
         errors.append("URL_DOMAIN_MISSING")
+    if parsed.scheme == "https":
+        try:
+            port_allowed = parsed.port in {None, 443} and not parsed.netloc.endswith(":")
+        except ValueError:
+            port_allowed = False
+        if not port_allowed:
+            errors.append("URL_PORT_NOT_ALLOWED")
     if domain and config.allowed_domains and not _domain_allowed(domain, config.allowed_domains):
         errors.append("DOMAIN_NOT_ALLOWLISTED")
     if _looks_private_or_broker_like(url):
@@ -180,7 +187,7 @@ def _scheme_allowed(scheme: str, allow_local_fixture_url: bool) -> bool:
 
 def _domain_allowed(domain: str, allowed_domains: tuple[str, ...]) -> bool:
     normalized = tuple(item.lower().strip() for item in allowed_domains if item.strip())
-    return any(domain == item or domain.endswith(f".{item}") for item in normalized)
+    return domain in normalized
 
 
 def _looks_private_or_broker_like(value: str) -> bool:

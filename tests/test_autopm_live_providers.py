@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import socket
@@ -65,11 +66,13 @@ def test_fake_injectable_transport_returns_manifest_without_network() -> None:
     assert result.payload == {"ticker": "CAMT", "revenue": 123}
 
 
-def test_source_hash_is_deterministic_for_canonical_json() -> None:
+def test_source_hash_is_deterministic_for_exact_raw_response() -> None:
     first = compute_source_hash("https://data.sec.gov/a.json", '{"b":2,"a":1}')
     second = compute_source_hash("https://data.sec.gov/a.json", '{ "a": 1, "b": 2 }')
 
-    assert first == second
+    assert first != second
+    assert first == hashlib.sha256(b'{"b":2,"a":1}').hexdigest()
+    assert first == compute_source_hash("https://data.sec.gov/a.json", b'{"b":2,"a":1}')
 
 
 def test_default_transport_refuses_network_even_when_config_enabled() -> None:
@@ -178,3 +181,50 @@ def subprocess_output(args: list[str]) -> str:
 
     result = subprocess.run(args, cwd=ROOT, check=True, capture_output=True, text=True)
     return result.stdout.strip()
+
+
+@pytest.mark.parametrize("body", ["not-json", b"not-json", b"{", b"", b"\xff", b"NaN", b"Infinity", b"-Infinity"])
+def test_invalid_json_fails_closed_without_cache(body: bytes | str, tmp_path: Path) -> None:
+    cache_dir = tmp_path / "safe-cache"
+    provider = OfficialPublicReadOnlyProvider(
+        _config(cache_enabled=True, cache_dir=str(cache_dir)),
+        transport=lambda request: ReadOnlyProviderResponse(200, body),
+    )
+    with pytest.raises(LiveProviderError, match="invalid JSON"):
+        provider.fetch("https://data.sec.gov/a.json")
+    assert not cache_dir.exists()
+
+
+def test_raw_bytes_and_cache_remain_byte_identical(tmp_path: Path) -> None:
+    raw = b'{\r\n  "label": "\xc3\xa9", "n": 2\r\n}\n'
+    provider = OfficialPublicReadOnlyProvider(
+        _config(cache_enabled=True, cache_dir=str(tmp_path / "safe-cache")),
+        transport=lambda request: ReadOnlyProviderResponse(200, raw),
+    )
+    result = provider.fetch("https://data.sec.gov/a.json")
+    assert result.payload == {"label": "é", "n": 2}
+    assert result.source_hash == hashlib.sha256(raw).hexdigest()
+    assert Path(result.cache_path).read_bytes() == raw
+    assert result.source_url == "https://data.sec.gov/a.json"
+
+
+def test_json_scalars_remain_valid_and_head_needs_no_json_body() -> None:
+    provider = OfficialPublicReadOnlyProvider(
+        _config(), transport=lambda request: ReadOnlyProviderResponse(200, b"true"),
+    )
+    assert provider.fetch("https://data.sec.gov/a.json").payload is True
+    provider = OfficialPublicReadOnlyProvider(
+        _config(), transport=lambda request: ReadOnlyProviderResponse(200, b""),
+    )
+    result = provider.fetch("https://data.sec.gov/a.json", method="HEAD")
+    assert result.payload is None
+    assert result.source_hash == hashlib.sha256(b"").hexdigest()
+
+
+@pytest.mark.parametrize("url", ["https://evil.data.sec.gov/a.json", "https://data.sec.gov:444/a.json"])
+def test_rejected_endpoint_never_reaches_transport(url: str) -> None:
+    def forbidden(request: ReadOnlyProviderRequest) -> ReadOnlyProviderResponse:
+        raise AssertionError("rejected endpoints cannot reach transport")
+    provider = OfficialPublicReadOnlyProvider(_config(), transport=forbidden)
+    with pytest.raises(ValueError, match="DOMAIN_NOT_ALLOWLISTED|URL_PORT_NOT_ALLOWED"):
+        provider.fetch(url)

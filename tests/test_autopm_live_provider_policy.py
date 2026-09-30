@@ -122,3 +122,25 @@ def test_market_data_vendor_level_supported() -> None:
     )
 
     assert result.allowed is True
+
+
+def test_domain_allowlist_requires_exact_hostname() -> None:
+    assert evaluate_live_provider_request(_config(), url="https://data.sec.gov/a.json").allowed
+    assert evaluate_live_provider_request(_config(), url="https://DATA.SEC.GOV/a.json").allowed
+    for host in ("evil.data.sec.gov", "data.sec.gov.example", "data.sec.gov."):
+        result = evaluate_live_provider_request(_config(), url=f"https://{host}/a.json")
+        assert not result.allowed
+        assert "DOMAIN_NOT_ALLOWLISTED" in result.error_codes
+    # An intended separate host must be independently and explicitly listed.
+    assert evaluate_live_provider_request(
+        _config(allowed_domains=("explicit.data.sec.gov",)),
+        url="https://explicit.data.sec.gov/a.json",
+    ).allowed
+
+
+def test_only_default_https_port_is_allowed() -> None:
+    assert evaluate_live_provider_request(_config(), url="https://data.sec.gov:443/a.json").allowed
+    for port in ("444", "80", "0", "-1", "65536", "invalid", ""):
+        result = evaluate_live_provider_request(_config(), url=f"https://data.sec.gov:{port}/a.json")
+        assert not result.allowed
+        assert "URL_PORT_NOT_ALLOWED" in result.error_codes

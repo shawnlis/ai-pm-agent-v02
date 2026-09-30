@@ -41,8 +41,9 @@ Live provider requests fail closed unless all of the following are explicit:
 - `offline=false`
 - provider name
 - read-only provider level
-- allowlisted domain
+- exact allowlisted hostname (subdomains must be separately listed)
 - `https` URL
+- absent port or explicit port `443`; malformed and other ports are rejected
 - read-only `GET` or `HEAD` method
 - user agent when required
 - safe cache directory when caching is enabled
@@ -72,6 +73,23 @@ Every provider result manifest includes:
 The provider shell uses dependency-injected transport. Tests use fake transports
 and make no network calls. The default transport refuses network access and
 raises until a future PR implements a reviewed transport.
+
+GET responses must parse as valid JSON. Invalid JSON, encoding failures, and
+non-standard `NaN`/`Infinity` literals fail closed before cache writes. JSON
+scalars remain valid; HEAD responses have `payload=None` and require no JSON body.
+
+Transports should return the original response bytes in `ReadOnlyProviderResponse.body`.
+Existing explicit text fixtures remain accepted as UTF-8. `source_hash` is
+SHA-256 of those exact bytes, without normalizing JSON whitespace or key order.
+The URL is not included in this byte hash.
+The URL remains a separate manifest field. Enabled cache writes retain the exact
+same bytes, including newlines. Earlier hashes combined URL with canonical JSON
+and are not interchangeable with the byte hash; existing caches are not migrated.
+
+The four boundary fixes do not activate any transport. Redirect handling,
+response content-type/size limits, filesystem cache-root enforcement, and
+computed freshness still require a separately reviewed transport/integration
+change. A passing local provider test is not production provider qualification.
 
 ## Non-Integration Boundary
 
