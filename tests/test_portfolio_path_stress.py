@@ -55,6 +55,76 @@ def test_cash_fx_lines_and_base_not_double_counted(fixture):
     assert s.reconciliation["excluded_fx_lines"]==1
     assert s.residual==0
 
+def enable_mtm(c):
+    c["option_valuation"]="anchored_european"
+    c["option_contracts"]["4"].update(annual_iv=.4,risk_free_rate=.04,dividend_yield=0.)
+    return c
+
+def test_european_put_reference_and_limits():
+    # Standard independent textbook reference S=K=100, r=5%, sigma=20%, T=1.
+    assert m.european_put(100,100,1,.2,.05)==pytest.approx(5.5735260223)
+    assert m.european_put(80,100,0,.2,.05)==20
+    assert m.european_put(120,100,0,.2,.05)==0
+    assert m.european_put(90,100,1,0,0)==10
+
+@pytest.mark.parametrize("args",[(0,100,1,.2,.05),(100,-1,1,.2,.05),
+    (100,100,-1,.2,.05),(100,100,1,-.2,.05),(100,100,1,float('nan'),.05)])
+def test_european_invalid_inputs(args):
+    with pytest.raises(ValueError):m.european_put(*args)
+
+def test_european_direction_volatility_and_dividend_sensitivities():
+    p=m.european_put(100,100,1,.2,.04)
+    assert m.european_put(90,100,1,.2,.04)>p
+    assert m.european_put(100,100,1,.4,.04)>p
+    assert m.european_put(100,100,1,.2,.04,.03)>p
+
+def test_anchor_basis_decays_and_expiry_matches_intrinsic():
+    model=m.european_put(100,100,1,.2,.04)
+    mark=model+1
+    assert m.anchored_put_mark(mark,model,1,100,100,1,.2,.04,0)==pytest.approx(mark)
+    assert m.anchored_put_mark(mark,model,1,80,100,0,.2,.04,0)==20
+
+def test_iv_shock_requires_explicit_mtm(fixture):
+    _,c,s=fixture
+    scenario=copy.deepcopy(c['scenarios'][0]);scenario['option_iv_shift']=.2
+    with pytest.raises(ValueError,match='requires explicit'):m.run_scenario(s,c,scenario,'current')
+
+def test_missing_mtm_inputs_fail_closed(fixture):
+    _,c,s=fixture;c['option_valuation']='anchored_european'
+    with pytest.raises(ValueError,match='explicit IV'):m.run_scenario(s,c,c['scenarios'][0],'current')
+
+def test_negative_shocked_iv_fails(fixture):
+    _,c,s=fixture;enable_mtm(c)
+    scenario=copy.deepcopy(c['scenarios'][0]);scenario['option_iv_shift']=-.5
+    with pytest.raises(ValueError,match='positive explicit'):m.run_scenario(s,c,scenario,'current')
+
+def test_preexpiry_vol_shock_changes_liability_and_nav(fixture):
+    _,c,s=fixture;enable_mtm(c);c['end_date']='2026-10-09'
+    c['option_contracts']['4']['anchor_price']=10
+    baseline=m.run_scenario(s,c,c['scenarios'][0],'current',True)
+    scenario=copy.deepcopy(c['scenarios'][0]);scenario['option_iv_shift']=.8
+    stressed=m.run_scenario(s,c,scenario,'current',True)
+    assert stressed['end_nav_usd']<baseline['end_nav_usd']
+    assert stressed['path'][-1]['pending_option_liability_usd']>baseline['path'][-1]['pending_option_liability_usd']
+    assert stressed['initial_nav_after_cost']==baseline['initial_nav_after_cost']
+    assert stressed['assignment_cash_usd']==0
+
+def test_mtm_expiry_does_not_double_count_assignment_or_change_financing(fixture):
+    _,c,s=fixture
+    frozen=m.run_scenario(s,c,c['scenarios'][0],'repay_debt_keep_etfs')
+    enable_mtm(c)
+    marked=m.run_scenario(s,c,c['scenarios'][0],'repay_debt_keep_etfs')
+    for k in ('end_nav_usd','assignment_cash_usd','end_debt_usd','external_interest_usd'):
+        assert marked[k]==pytest.approx(frozen[k])
+    assert marked['assignment_cash_usd']==1000
+    assert marked['external_interest_usd']>0
+
+def test_mtm_no_network_and_input_unchanged(fixture):
+    p,c,s=fixture;enable_mtm(c);before=hashlib.sha256(p.read_bytes()).hexdigest()
+    with patch.object(socket,'socket',side_effect=AssertionError('network forbidden')):
+        m.run_scenario(s,c,c['scenarios'][0],'current')
+    assert hashlib.sha256(p.read_bytes()).hexdigest()==before
+
 def test_reused_daily_notional_definition(fixture):
     _,_,s=fixture
     assert s.reconciliation["daily_notional_nav_ex_options"]==pytest.approx(5500/1920)

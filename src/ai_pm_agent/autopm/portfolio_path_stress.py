@@ -348,8 +348,60 @@ def option_specs(snap, cfg):
             raise ValueError("mark multiplier differs from conditional standard contract")
     return specs
 
+def european_put(spot, strike, years, volatility, rate, dividend_yield=0.):
+    """European Black-Scholes sensitivity proxy per unit, never an execution quote."""
+    spot, strike, years, volatility, rate, dividend_yield = [
+        finite(v, "option model input") for v in
+        (spot, strike, years, volatility, rate, dividend_yield)]
+    if spot <= 0 or strike <= 0 or years < 0 or volatility < 0:
+        raise ValueError("invalid option model input")
+    if years == 0:
+        return max(strike-spot, 0.)
+    discounted_strike = strike*math.exp(-rate*years)
+    discounted_spot = spot*math.exp(-dividend_yield*years)
+    if volatility == 0:
+        return max(discounted_strike-discounted_spot, 0.)
+    sigma_t = volatility*math.sqrt(years)
+    d1 = (math.log(spot/strike)+(rate-dividend_yield+volatility**2/2)*years)/sigma_t
+    d2 = d1-sigma_t
+    cdf = lambda x: .5*(1+math.erf(x/math.sqrt(2)))
+    return max(0., discounted_strike*cdf(-d2)-discounted_spot*cdf(-d1))
+
+def option_mtm_inputs(specs, cfg, scenario):
+    method = cfg.get("option_valuation", "frozen_snapshot")
+    if method not in ("frozen_snapshot", "anchored_european"):
+        raise ValueError("unsupported option valuation")
+    if method == "frozen_snapshot":
+        if scenario.get("option_iv_shift", 0) != 0:
+            raise ValueError("volatility shock requires explicit option MTM")
+        return None
+    shift = finite(scenario.get("option_iv_shift", 0), "IV shift")
+    result = {}
+    for key, spec in specs.items():
+        if any(k not in spec for k in ("annual_iv", "risk_free_rate", "dividend_yield")):
+            raise ValueError("explicit IV, rate and dividend yield required")
+        values = {k: finite(spec[k], k) for k in ("annual_iv", "risk_free_rate", "dividend_yield")}
+        if values["annual_iv"] <= 0 or values["annual_iv"]+shift <= 0:
+            raise ValueError("positive explicit option IV required")
+        years = (date.fromisoformat(spec["expiry"])-date.fromisoformat(cfg["start_date"])).days/365
+        result[key] = {**values, "base_model": european_put(spec["anchor_price"], spec["strike"],
+            years, values["annual_iv"], values["risk_free_rate"], values["dividend_yield"])}
+    return result
+
+def anchored_put_mark(initial_mark, initial_model, initial_years, spot, strike,
+                      remaining_years, volatility, rate, dividend_yield):
+    """Model change plus linearly decaying mark/model basis, converging to intrinsic.
+
+    Intrinsic floor/strike cap are envelopes only. American early exercise,
+    discrete dividends, executable prices and broker margin are not modeled.
+    """
+    model = european_put(spot, strike, remaining_years, volatility, rate, dividend_yield)
+    basis = (initial_mark-initial_model)*remaining_years/initial_years if initial_years > 0 else 0.
+    return min(strike, max(strike-spot, 0., model+basis))
+
 def run_scenario(snap, cfg, scenario, strategy, store_path=False):
     specs = option_specs(snap,cfg)
+    mtm = option_mtm_inputs(specs,cfg,scenario)
     dates=sessions(cfg["start_date"],cfg["end_date"],cfg["holidays"])
     start,end=date.fromisoformat(cfg["start_date"]),date.fromisoformat(cfg["end_date"])
     paths = {f:path_returns(a["endpoint"],a["amplitude"],len(dates),a.get("first_leg"))
@@ -416,6 +468,15 @@ def run_scenario(snap, cfg, scenario, strategy, store_path=False):
                 seen.add(u)
         for o in list(pending):
             s=specs[str(o["contract_id"])]
+            if mtm is not None and d < date.fromisoformat(s["expiry"]):
+                inputs=mtm[str(o["contract_id"])]
+                initial_years=(date.fromisoformat(s["expiry"])-start).days/365
+                remaining_years=(date.fromisoformat(s["expiry"])-d).days/365
+                mark=anchored_put_mark(o["market_price"],inputs["base_model"],initial_years,
+                    under_prices[s["underlying"]],s["strike"],remaining_years,
+                    inputs["annual_iv"]+scenario.get("option_iv_shift",0),
+                    inputs["risk_free_rate"]+scenario.get("rate_shift",0),inputs["dividend_yield"])
+                o["usd_value"]=o["position"]*100*mark
             if d >= date.fromisoformat(s["expiry"]):
                 units=abs(o["position"])*100
                 price=under_prices[s["underlying"]]
@@ -444,7 +505,8 @@ def run_scenario(snap, cfg, scenario, strategy, store_path=False):
         min_nav=min(min_nav,current)
         drawdown=min(drawdown,current/peak-1)
         if store_path:
-            rows.append({"date":d.isoformat(),"nav_usd":current,"grid_drawdown":current/peak-1})
+            rows.append({"date":d.isoformat(),"nav_usd":current,"grid_drawdown":current/peak-1,
+                         "pending_option_liability_usd":-sum(o["usd_value"] for o in pending)})
     result={"scenario":scenario["name"],"strategy":strategy,"end_nav_usd":current,
             "nav_return":current/snap.nav-1,"grid_drawdown":drawdown,
             "min_grid_nav_usd":min_nav,"initial_cost_usd":state["cost"],
@@ -453,7 +515,9 @@ def run_scenario(snap, cfg, scenario, strategy, store_path=False):
             "assignment_cash_usd":assignment_usd,
             "end_debt_usd":sum(max(0.,-cash[c])*snap.fx[c]*fx_levels[c] for c in cash),
             "initial_daily_notional_nav":state["initial_daily_notional_nav"],
-            "option_proxy_warning":"Conditional100; snapshot marks frozen before expiry, physical assignment proxy; no margin MTM",
+            "option_proxy_warning":("Conditional100; anchored European MTM sensitivity with decaying mark basis; "
+                "no American early exercise, discrete dividends or broker margin model" if mtm is not None else
+                "Conditional100; snapshot marks frozen before expiry, physical assignment proxy; no margin MTM"),
             "events":events,"path":rows,
             "initial_nav_after_cost":initial_nav,
             "initial_option_mark_usd":initial_option_mark}

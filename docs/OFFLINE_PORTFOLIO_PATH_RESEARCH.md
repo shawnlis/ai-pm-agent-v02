@@ -86,9 +86,24 @@ Under this conditional branch, expiry assignment debits USD strike cash and adds
 strike. Delivered shares then follow the same supplied path. Repaying debt at the
 start does not stop later assignment from re-creating debt.
 
-Pre-expiry option marks are held constant. Path drawdown is therefore a grid
-proxy with incomplete option MTM, not a broker margin or liquidation simulation.
-Early exercise is omitted. Benchmark option closures use snapshot marks plus
+Pre-expiry marks remain frozen by default for compatibility. Optional
+`option_valuation: "anchored_european"` requires each contract to supply
+`annual_iv`, `risk_free_rate` and `dividend_yield`. A scenario may then supply
+`option_iv_shift` in absolute annual volatility units (0.20 means 20 percentage
+points), applied from the first modeled session. Missing or invalid inputs fail
+closed. This offline sensitivity does not fetch or calibrate IV.
+
+The proxy uses European Black-Scholes value plus the initial observed mark/model
+difference, decaying linearly with remaining calendar time. Initial NAV keeps
+the observed mark; subsequent marks have an intrinsic floor and strike cap.
+Those envelopes do not price American early exercise or discrete dividends.
+The proxy converges to intrinsic at expiry, where existing physical assignment
+accounting removes the liability and adds shares/debt exactly once. Model value
+and initial mark can differ because their inputs have different observation times.
+Daily path records include pending option liability for audit.
+
+Path drawdown remains a conditional grid proxy, not a broker margin or liquidation
+simulation. Early exercise is omitted. Benchmark option closures use snapshot marks plus
 an explicitly assumed gap; this is not an executable option price.
 No new premiums, bid/ask prices, IV, funding quotes, probabilities or optimized
 weights are fabricated.
@@ -105,4 +120,7 @@ Synthetic tests cover daily compounding, cash/FX accounting, tiered financing,
 initial NAV conservation, conditional contracts, assignment financing, missing
 and stale inputs, weak evidence gates, default CLI behavior, output schema,
 network prohibition and input immutability. Taxes, exact executions, margin
-requirements, option MTM and calibrated historical win rates remain outside scope.
+requirements, executable American option prices and calibrated historical win rates
+remain outside scope. Option tests cover a standard Black-Scholes reference,
+direction/volatility sensitivities, basis convergence, explicit opt-in, initial NAV
+and unchanged post-expiry financing/assignment accounting.
