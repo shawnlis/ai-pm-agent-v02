@@ -1,0 +1,83 @@
+{
+  "retrieved_utc": "2026-10-02T12:00:00Z",
+  "get_account_summary": {
+    "currency": "USD",
+    "net_liquidation": 1920.0,
+    "total_cash_value": -560.0,
+    "gross_position_value": 2520.0,
+    "leverage": "synthetic"
+  },
+  "get_account_balances": {
+    "balances": [
+      {
+        "currency": "BASE",
+        "cash_balance": -560,
+        "exchange_rate": 1
+      },
+      {
+        "currency": "USD",
+        "cash_balance": -100,
+        "exchange_rate": 1
+      },
+      {
+        "currency": "CHF",
+        "cash_balance": -300,
+        "exchange_rate": 1.2
+      },
+      {
+        "currency": "JPY",
+        "cash_balance": -10000,
+        "exchange_rate": 0.01
+      }
+    ]
+  },
+  "get_account_positions": {
+    "positions": [
+      {
+        "contract_id": 1,
+        "contract_description": "TQQQ",
+        "position": 10,
+        "market_price": 100,
+        "market_value": 1000,
+        "currency": "USD",
+        "asset_class": "STK"
+      },
+      {
+        "contract_id": 2,
+        "contract_description": "SOXL",
+        "position": 5,
+        "market_price": 100,
+        "market_value": 500,
+        "currency": "USD",
+        "asset_class": "STK"
+      },
+      {
+        "contract_id": 3,
+        "contract_description": "SYNTH",
+        "position": 10,
+        "market_price": 100,
+        "market_value": 1000,
+        "currency": "USD",
+        "asset_class": "STK"
+      },
+      {
+        "contract_id": 4,
+        "contract_description": "synthetic put",
+        "position": -1,
+        "market_price": 0.2,
+        "market_value": -20.0,
+        "currency": "USD",
+        "asset_class": "OPT"
+      },
+      {
+        "contract_id": 5,
+        "contract_description": "synthetic FX",
+        "position": 99,
+        "market_price": 22,
+        "market_value": 2178,
+        "currency": "USD",
+        "asset_class": "CASH"
+      }
+    ]
+  }
+}

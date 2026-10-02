@@ -1,0 +1,86 @@
+{
+  "provider_level": 0,
+  "allow_private_input": false,
+  "allow_conditional_100": true,
+  "research_only": true,
+  "source_id": "synthetic-test",
+  "start_date": "2026-10-02",
+  "end_date": "2027-10-02",
+  "holidays": [],
+  "holding_factors": {
+    "TQQQ": "nasdaq",
+    "SOXL": "semis",
+    "SYNTH": "other"
+  },
+  "transaction_cost_bps": 10,
+  "fx_cost_bps": 5,
+  "option_close_gap_fraction": 0.1,
+  "fund_expense": {
+    "QQQ": 0.002,
+    "TQQQ": 0.01,
+    "SOXL": 0.01
+  },
+  "fund_reference_rate": 0.04,
+  "fund_financing_spread": 0.005,
+  "rate_tiers": {
+    "USD": [
+      [
+        100,
+        0.05
+      ],
+      [
+        null,
+        0.04
+      ]
+    ],
+    "CHF": [
+      [
+        null,
+        0.01
+      ]
+    ],
+    "JPY": [
+      [
+        null,
+        0.02
+      ]
+    ]
+  },
+  "interest_day_count": {
+    "USD": 360,
+    "CHF": 360,
+    "JPY": 360
+  },
+  "option_contracts": {
+    "4": {
+      "underlying": "OPT_SYNTH",
+      "expiry": "2026-10-16",
+      "strike": 10,
+      "put_call": "PUT",
+      "anchor_price": 9,
+      "factor": "other",
+      "contractual_multiplier": null,
+      "deliverable": null
+    }
+  },
+  "scenarios": [
+    {
+      "name": "flat",
+      "factors": {
+        "nasdaq": {
+          "endpoint": 0.0,
+          "amplitude": 0.0
+        },
+        "semis": {
+          "endpoint": 0.0,
+          "amplitude": 0.0
+        },
+        "other": {
+          "endpoint": 0.0,
+          "amplitude": 0.0
+        }
+      },
+      "fx_changes": {}
+    }
+  ]
+}
